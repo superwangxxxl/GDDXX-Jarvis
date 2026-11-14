@@ -53,7 +53,7 @@ def write_dir(dest, files=FILES):
 
 
 def snapshot(d):
-    return {str(p.relative_to(d)): p.read_bytes() for p in Path(d).rglob("*") if p.is_file()}
+    return {p.relative_to(d).as_posix(): p.read_bytes() for p in Path(d).rglob("*") if p.is_file()}
 
 
 def main():
