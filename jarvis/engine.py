@@ -18,8 +18,14 @@ import numpy as np
 from . import models
 from .wake import split_wake, greet_wake
 
-WAKE_REMNANT = re.compile(r"^(?:(?:[嗨嘿海开哎诶]?[贾加嘉甲假佳哎诶]?[维为威卫伟][斯思丝司死])|(?:(?:hey|hi|okay|ok|a)[\s,]+)?(?:jarvis|javis|jarvas|jervis|jarves|travis|harvis|service)\b)[，,。.!\s]*", re.I)
-NAME_LIKE = re.compile(r"(?:jar|jer|ja|tra|dja|cha|har|gar)\s?v[aei]?[sz]\b", re.I)
+WAKE_REMNANT = re.compile(
+    r"^(?:(?:[嗨嘿海开哎诶]?[贾加嘉甲假佳哎诶]?[维为威卫伟][斯思丝司死])|"
+    r"(?:(?:hey|hi|okay|ok|a)[\s,]+)?(?:jarvis|javis|jarvas|jervis|jarves|jervious|jarvious|jervios|jarvios|"
+    r"jervus|jarvus|jarvius|jerviis|jarviis|jervies|jarvies|jervase|jarvise|gervis|travis|harvis|service)\b)"
+    r"[，,。.!\s]*", re.I)
+# Near-misses of the name after an acoustic hit (verify). Keep bounded: must look like Jar/Jer…vis/vous.
+NAME_LIKE = re.compile(
+    r"(?:jar|jer|ja|tra|dja|cha|har|gar|ger)\s?v(?:[aeiou]?[sz]|ious|ios|us|iis|ies|ase|ise)\b", re.I)
 FILLER = re.compile(r"^(?:[嗯啊哦呃额唉哎嗷噢 ]{1,3}|(?:um+|uh+|hmm+|mm+|ah+|oh)(?:[ ,]+(?:um+|uh+|hmm+|mm+|ah+|oh))*)[。.!！?？]*$", re.I)
 STOP_WORDS = re.compile(r"^(?:停|停一下|停下|别说了|不用说了|闭嘴|好了|可以了|行了|算了|(?:okay|ok|alright)?[ ,]*(?:stop|wait|hold on|enough|that's enough|never mind|nevermind|cancel|shut up|be quiet|quiet|thanks|thank you|got it|okay|ok)(?:[ ,]+(?:jarvis|please|now|thanks|that's fine|it))*)[。.!！?？]*$", re.I)
 
@@ -58,6 +64,8 @@ class VoiceEngine:
         self.said = ""              # what Jarvis just said, to drop its own echo
         self.drop_before = None
         self.pending_ack = False    # wake confirmed while the user was still talking
+        self.kw_strong = False
+        self.kw_english = False     # openWakeWord / English acoustic hit (even when voice_lang=zh)
         self.ring = np.zeros(int(30 * models.SR), np.float32)   # last 30 s, for onset padding
         self.log = []
         self.voice = None           # voiceprint.Voiceprint, set by the service: only the user's voice counts
@@ -150,6 +158,7 @@ class VoiceEngine:
         self.state = "standby"
         self.woke_at = self.wait_until = self.cut_from = self.verify_at = None
         self.follow = self.barged = self.pending_ack = False
+        self.kw_strong = self.kw_english = False
         self.said = ""
         self.drop_before = None
 
@@ -161,6 +170,8 @@ class VoiceEngine:
             self.state = "awake"
             self.woke_at = t
             self.kw_strong = keyword.startswith(("嗨", "嘿", "hey"))
+            # English acoustic wake in any voice_lang: SenseVoice may garble "Jarvis"; re-cut Chinese commands.
+            self.kw_english = bool(re.match(r"(?i)^(?:hey\b|jarvis)", keyword or ""))
             self.wake_peak = getattr(self.wake, "score", 0.0)
             self.wait_until = None
             self._event("wake", {"keyword": keyword})
@@ -289,9 +300,10 @@ class VoiceEngine:
                 woke_in, after = split_wake(text, trusted=holds_wake)
                 # "Hey Jarvis." alone leaves nothing after the wake word: that is not a command
                 cmd = WAKE_REMNANT.sub("", after if woke_in else text).strip(" ,.!?，。！？")
-                if holds_wake and models.LANG == "en" and re.search(r"[\u4e00-\u9fff]", cmd):
-                    # Chinese after an English wake word ("嘿E JARIS 把台灯打开"): transcribe only what
-                    # came after the detector fired, so the garbled wake is not part of the request
+                if holds_wake and getattr(self, "kw_english", models.LANG == "en") and re.search(r"[\u4e00-\u9fff]", cmd):
+                    # Chinese after an English wake ("嘿E JARIS / JERVIOUS 把台灯打开"): transcribe only what
+                    # came after the detector fired, so the garbled wake is not part of the request.
+                    # Only when the acoustic wake was English — never for「嗨贾维斯…」(that used to eat the command).
                     rest = samples[int(max(0.0, self.woke_at - start) * models.SR):]
                     again = self._text(rest, mixed=True) if len(rest) > 0.4 * models.SR else ""
                     if re.search(r"[\u4e00-\u9fff]", again):

@@ -263,6 +263,9 @@ button{font:inherit;color:inherit}
 #voiceBox button,#voiceBox select{background:rgba(var(--sk-pri),.14);border:1px solid var(--line-2);border-radius:5px;color:var(--ink);padding:4px 10px;font-size:12px;cursor:pointer}
 #voiceBox select option{background:#0a1720}
 #voiceBox button:disabled{opacity:.5;cursor:default}
+#voiceBox .vb-row input[type=range]{flex:1;min-width:60px;accent-color:var(--cyan)}
+#voiceBox .vb-row b{min-width:38px;font-weight:400;color:var(--ink)}
+#voiceBox .vb-row select{max-width:230px}
 #voiceBox .vb-msg{min-height:1.4em;color:var(--cyan);word-break:break-word}#voiceBox .vb-msg.bad{color:#FFC27A}
 #voiceBox .vb-note{margin-top:6px;font-size:11.5px;line-height:1.5;color:var(--ink-3)}
 #dwsCard{position:fixed;left:24px;bottom:132px;width:340px;z-index:30;padding:12px 14px;background:rgba(var(--sk-pnl),.94);border:1px solid var(--line-2);border-radius:10px;font-size:13px;color:var(--ink-2);box-shadow:0 8px 30px rgba(0,0,0,.45)}

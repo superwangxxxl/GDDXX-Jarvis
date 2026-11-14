@@ -5,8 +5,12 @@ audio or a sentence that merely sounds close does not wake Jarvis.
 """
 import re
 
+# Latin aliases are SenseVoice / accent near-misses of "Jarvis" only (e.g. JERVIOUS). Keep this list
+# narrow: common English words (service, travis, jealous, …) must NOT wake on their own.
 STRONG = [
     "jarvis", "javis", "jarviss", "jarves", "jarvice", "jarvas", "jervis",
+    "jervious", "jarvious", "jervios", "jarvios", "jervus", "jarvus", "jarvius",
+    "jerviis", "jarviis", "jervies", "jarvies", "jervase", "jarvise", "gervis",
     "贾维斯", "加维斯", "扎维斯", "嘉维斯", "假维斯", "佳维斯", "家维斯", "杰维斯", "贾维思",
     "贾威斯", "贾伟思", "杰维思", "贾维丝", "贾维司", "佳伟斯", "家伟斯", "扎维丝", "扎维思",
     "扎维司", "炸维斯", "查维斯", "贾维士", "加微斯", "佳微斯", "嘉微斯", "贾薇斯", "賈維斯",

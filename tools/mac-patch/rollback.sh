@@ -35,7 +35,7 @@ for k, v in old.items():                     # the values the keys had when the 
     cfg.pop(k, None) if v is None else cfg.__setitem__(k, v)
     print("[rollback] config %s: %s" % (k, "removed (it was not set before the install)" if v is None else "back to the value from before the install"))
 cfg.pop("weather", None)
-for k in ("voice_tts", "system_voice"):
+for k in ("voice_tts", "system_voice", "voice_speaker", "voice_fx"):
     cfg.pop(k, None)
 tmp = os.environ["CFG"] + ".tmp"
 open(tmp, "w", encoding="utf-8").write(json.dumps(cfg, ensure_ascii=False, indent=2)); os.chmod(tmp, 0o600); os.replace(tmp, os.environ["CFG"])

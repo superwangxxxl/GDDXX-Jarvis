@@ -36,6 +36,11 @@ jobs:
       - name: install.sh / rollback.sh guarantees (stand-in app and patch)
         if: runner.os != 'Windows'
         run: python tests/test_patch_install.py
+      - name: an older voice service no longer blocks the port
+        if: runner.os != 'Windows'
+        run: python tests/test_service_port.py
+      - name: bilingual wake aliases (Hey Jarvis / JERVIOUS) keep reply_lang
+        run: python tests/test_wake_bilingual.py
       - name: every module imports
         run: python -c "import jarvis.service, jarvis.gesture, jarvis.onboard, jarvis.tools as t; print(sorted(t.names()))"
 

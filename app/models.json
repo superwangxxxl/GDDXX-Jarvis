@@ -85,7 +85,7 @@
    "urls": [
     "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/hey_jarvis_v0.1.onnx"
    ],
-   "group": "en"
+   "group": "core"
   },
   {
    "path": "openwakeword/melspectrogram.onnx",
@@ -94,7 +94,7 @@
    "urls": [
     "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/melspectrogram.onnx"
    ],
-   "group": "en"
+   "group": "core"
   },
   {
    "path": "openwakeword/embedding_model.onnx",
@@ -103,7 +103,7 @@
    "urls": [
     "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1/embedding_model.onnx"
    ],
-   "group": "en"
+   "group": "core"
   },
   {
    "path": "alan/en_GB-alan-medium.onnx",

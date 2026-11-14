@@ -11,6 +11,12 @@ vBox.innerHTML = `<div class="vb-top"><span class="pip"></span>语言与语音<b
 <dl class="vb-rows" id="vbRows"></dl>
 <div class="vb-row"><span>语言</span><span id="vbLangBtns"></span></div>
 <div class="vb-row"><span>中文播报引擎</span><select id="vbTts" aria-label="中文播报引擎"><option value="auto">自动（优先本机模型）</option><option value="local">本机 Kokoro 模型</option><option value="system">macOS 系统声音</option></select><button type="button" id="vbTest">试听一句</button></div>
+<div class="vb-style" id="vbStyle" hidden>
+<div class="vb-row"><span>中文男声</span><select id="vbSpk" aria-label="中文男声"></select></div>
+<div class="vb-row"><span>机械效果</span><select id="vbFx" aria-label="机械效果"><option value="scifi">轻回声（默认）</option><option value="robot">机械（金属感）</option><option value="off">关闭</option></select><input type="range" id="vbAmt" min="0" max="100" step="5" aria-label="效果强度"><b id="vbAmtV"></b></div>
+<div class="vb-row"><span></span><button type="button" id="vbPrev">试听（不保存）</button><button type="button" id="vbUse">使用这个声音</button><button type="button" id="vbReset">恢复默认</button></div>
+<div class="vb-note">声音是模型自带的 45 个中文男声之一（名字和编号来自模型官方的说话人表，基频是我们实测的中位数，只供参考）；效果是单独的开关，随时可以关掉或恢复默认，不会改变语速。</div>
+</div>
 <div class="vb-msg" id="vbMsg"></div>
 <div class="vb-note">识别、唤醒和语音合成都在本机运行；只有识别出的文字（和工具结果）会发给你在「接入大脑」里选的大模型。</div>`;
 document.body.appendChild(vBox);
@@ -40,8 +46,24 @@ function voiceInfo(m) {
   vq('#vbRows').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(String(v))}</dd></div>`).join('');
   vq('#vbLangBtns').innerHTML = ['zh', 'en'].map(l => `<button type="button" data-l="${l}"${l === m.lang && !m.fallback ? ' disabled' : ''}>${l === 'zh' ? '中文语音' : 'English voice'}${l === m.lang && !m.fallback ? '（当前）' : m.other_ready || l === m.lang ? '' : '（需下载）'}</button>`).join('');
   vq('#vbTts').value = m.tts_mode || 'auto'; vq('#vbTts').disabled = m.lang !== 'zh';
+  voiceStyle(m);
   if (!vq('#vbMsg').textContent.startsWith('正在')) vq('#vbMsg').textContent = '';
 }
+const fxLabel = { scifi: '轻回声', robot: '机械', off: '无' };
+const vSend = (type, extra = {}) => liveSend({ type, speaker: +vq('#vbSpk').value, fx: vq('#vbFx').value, amount: +vq('#vbAmt').value, ...extra });
+vq('#vbAmt').addEventListener('input', () => { vq('#vbAmtV').textContent = vq('#vbAmt').value + '%'; });
+vq('#vbFx').addEventListener('change', () => { vq('#vbAmt').disabled = vq('#vbFx').value === 'off'; });
+vq('#vbPrev').addEventListener('click', () => { if (vSend('voice_preview')) vq('#vbMsg').textContent = '正在试听…（没有保存）'; });
+vq('#vbUse').addEventListener('click', () => { if (vSend('voice_style')) vq('#vbMsg').textContent = '正在保存并试听…'; });
+vq('#vbReset').addEventListener('click', () => { if (liveSend({ type: 'voice_style_reset' })) vq('#vbMsg').textContent = '正在恢复默认…'; });
+function voiceStyle(m) {
+  const st = m.style, box = vq('#vbStyle');
+  box.hidden = !st; if (!st) return;
+  vq('#vbSpk').innerHTML = st.speakers.map(x => `<option value="${x.sid}">${x.name} · sid ${x.sid}${x.f0 ? ` · 约 ${x.f0} Hz` : ''}${x.sid === st.default.speaker ? ' · 默认' : ''}</option>`).join('');
+  vq('#vbSpk').value = st.speaker; vq('#vbFx').value = st.fx;
+  vq('#vbAmt').value = Math.round(st.amount * 100); vq('#vbAmtV').textContent = vq('#vbAmt').value + '%'; vq('#vbAmt').disabled = st.fx === 'off';
+}
+function voiceStyleMsg(m) { vBox.hidden = false; vq('#vbMsg').textContent = m.text; vq('#vbMsg').classList.remove('bad'); }
 const STAGE = { audio: '麦克风', wake: '唤醒', stt: '语音识别', brain: '大脑', tts: '语音播报' };
 function voiceError(m) {
   vErr.hidden = false; vErr.textContent = `${STAGE[m.stage] || '语音'}：${m.text}`;

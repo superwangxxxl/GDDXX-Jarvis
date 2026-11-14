@@ -144,6 +144,34 @@ def main():
     r = run("install.sh")
     assert r.returncode == 0 and not log.exists() and config()["voice_lang"] == "zh" and "reply_lang" not in config()
     assert (RES / "jarvis" / "service.py").read_text() == "new service\n"
+    # H. an upgrade built on an earlier patch (make-patch.sh --from): it applies on top of that patch without --force, and refuses
+    #    a stock install or a modified file instead of giving half an upgrade
+    def delta_setup(installed_service):
+        setup()
+        (PATCH / "files" / "jarvis" / "added.py").unlink()
+        (RES / "jarvis" / "service.py").write_text(installed_service)
+        (RES / "jarvis" / "other.py").write_text("other, as the earlier patch left it\n")
+        prev = sha(b"previous service\n")
+        (PATCH / "manifest.txt").write_text(
+            f"# requires jarvis/other.py {sha(b'other, as the earlier patch left it' + chr(10).encode())}\n"
+            f"M jarvis/service.py {sha(b'new service' + chr(10).encode())} {prev}\n")
+    delta_setup("previous service\n")
+    r = run("install.sh")
+    assert r.returncode == 0, (r.stdout, r.stderr)
+    assert (RES / "jarvis" / "service.py").read_text() == "new service\n" and "--force" not in r.stderr
+    first_run_backup = backups()
+    assert len(first_run_backup) == 1 and (SUPPORT / "patch-backup" / first_run_backup[0] / "files" / "jarvis" / "service.py").read_text() == "previous service\n"
+    r = run("install.sh")                                              # and running it again is fine
+    assert r.returncode == 0 and (RES / "jarvis" / "service.py").read_text() == "new service\n"
+    delta_setup("old service\n")                                      # stock 2.0.4: not the state this package builds on
+    r = run("install.sh")
+    assert r.returncode != 0 and "not a version this package builds on" in r.stdout + r.stderr and (RES / "jarvis" / "service.py").read_text() == "old service\n"
+    delta_setup("previous service\n")                                 # the earlier patch is only partly there
+    (RES / "jarvis" / "other.py").write_text("somebody edited this\n")
+    r = run("install.sh")
+    assert r.returncode != 0 and "install that package first" in r.stdout + r.stderr and (RES / "jarvis" / "service.py").read_text() == "previous service\n"
+    r = run("install.sh", "--force")                                   # force still exists for people who know what they are doing
+    assert r.returncode == 0 and (RES / "jarvis" / "service.py").read_text() == "new service\n"
     print("ok: install.sh / rollback.sh guarantees")
 
 

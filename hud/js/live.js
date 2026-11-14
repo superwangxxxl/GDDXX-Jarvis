@@ -30,6 +30,7 @@ function connectVoice() {
     else if (m.type === 'voice') voiceInfo(m);
     else if (m.type === 'voice_error') voiceError(m);
     else if (m.type === 'voice_switch') voiceSwitch(m);
+    else if (m.type === 'voice_style') voiceStyleMsg(m);
     else if (m.type === 'weather') wxUpdate(m);
     else if (m.type === 'weather_cities') wxCities(m);
     else if (m.type === 'dingtalk_minutes') dingtalkShow(m);

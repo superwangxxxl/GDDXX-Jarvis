@@ -47,17 +47,23 @@ if [ "${JARVIS_PATCH_ALLOW_NON_MAC:-0}" != 1 ] && pgrep -f "$APP/Contents/Resour
 
 # 1. checks before anything is changed
 BAD=0
-while read -r st path new old; do      # every file to replace must be the stock 2.0.4 file (or already patched)
+while read -r st path new old; do      # every file to replace must be an accepted old version (stock 2.0.4 or the installed earlier patch) or already new
+  case "$st" in
+    "#") continue;;
+  esac
   cur="$RES/$path"
-  if [ "$st" = M ]; then
-    [ -f "$cur" ] || { say "missing $path"; BAD=1; continue; }
+  if [ -e "$cur" ]; then
     h="$(sha "$cur")"
-    [ "$h" = "$old" ] || [ "$h" = "$new" ] || { say "$path is not the stock 2.0.4 file"; BAD=1; }
-  elif [ -e "$cur" ] && [ "$(sha "$cur")" != "$new" ]; then
-    say "$path already exists with other content"; BAD=1
+    case ",$old," in *",$h,"*) ;; *) [ "$h" = "$new" ] || { say "$path is not a version this package builds on"; BAD=1; };; esac
+  elif [ "$st" = M ]; then
+    say "missing $path"; BAD=1
   fi
 done < "$HERE/manifest.txt"
-if [ $BAD = 1 ] && [ $FORCE = 0 ]; then die "installed files differ from 2.0.4 (use --force to patch anyway; originals are backed up)"; fi
+while read -r hash req path want; do   # "# requires <file> <sha>": the earlier patch this one is built on must be in place
+  [ "$hash" = "#" ] && [ "$req" = requires ] || continue
+  [ -f "$RES/$path" ] && [ "$(sha "$RES/$path")" = "$want" ] || { say "$path is not as the earlier patch left it: install that package first"; BAD=1; }
+done < "$HERE/manifest.txt"
+if [ $BAD = 1 ] && [ $FORCE = 0 ]; then die "the installed files are not a version this package builds on (use --force to patch anyway; originals are backed up)"; fi
 if [ -n "$DWS" ]; then
   case "$DWS" in /*) ;; *) die "--dws needs an absolute path";; esac
   [ -x "$DWS" ] && [ "$(basename "$DWS")" = dws ] || die "$DWS is not an executable named dws"
@@ -66,7 +72,7 @@ if [ -e "$DATA/config.json" ]; then     # never write over a config this script 
   CFG="$DATA/config.json" "$PY" -c 'import json,os; json.load(open(os.environ["CFG"], encoding="utf-8"))' 2>/dev/null \
     || die "$DATA/config.json cannot be read as JSON: not touching it (fix or move it, then run again)"
 fi
-[ $DRY = 1 ] && { say "dry run: $(wc -l < "$HERE/manifest.txt" | tr -d ' ') files would be copied into $RES"; exit 0; }
+[ $DRY = 1 ] && { say "dry run: $(grep -vc '^#' "$HERE/manifest.txt" | tr -d ' ') files would be copied into $RES"; exit 0; }
 
 # 2. the Chinese models, verified before the app or the config change
 if [ $ZH = 1 ]; then
@@ -84,11 +90,11 @@ mkdir -p "$SUPPORT/patch-backup"; mkdir "$BK" || die "backup folder $BK already 
 mkdir "$BK/files"; chmod 700 "$SUPPORT/patch-backup" "$BK" 2>/dev/null || true
 : > "$BK/added.txt"; N=0
 while read -r st path new old; do
-  if [ "$st" = M ]; then
+  [ "$st" = "#" ] && continue
+  if [ -e "$RES/$path" ]; then
     [ "$(sha "$RES/$path")" = "$new" ] && continue
     mkdir -p "$BK/files/$(dirname "$path")"; cp -p "$RES/$path" "$BK/files/$path"; N=1
   else
-    [ -e "$RES/$path" ] && continue
     echo "$path" >> "$BK/added.txt"; N=1
   fi
 done < "$HERE/manifest.txt"
@@ -98,6 +104,7 @@ echo "$APP" > "$BK/app.txt"
 # 4. copy and verify
 COPIED=1
 while read -r st path new old; do
+  [ "$st" = "#" ] && continue
   mkdir -p "$RES/$(dirname "$path")"
   cp "$HERE/files/$path" "$RES/$path" || die "could not write $path (macOS may need App Management / Full Disk Access for this Terminal)"
   [ "$(sha "$RES/$path")" = "$new" ] || die "checksum mismatch after copying $path"

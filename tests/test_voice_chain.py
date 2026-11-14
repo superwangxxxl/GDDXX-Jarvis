@@ -281,6 +281,96 @@ def main():
     assert s.voice_info()["fallback"]["wanted"] == "zh"
     config.RUNTIME.clear()
 
+    # -- the Chinese male voice and the mechanical effect: real speakers only, reversible, defaults unchanged
+    assert len(tts.MALE_NAMES) == 45 and list(tts.MALE_SIDS) == list(range(58, 103)) and tts.MALE_NAMES[68 - 58] == "zm_029" == tts.male_speakers()[10]["name"]
+    assert tts.MALE_NAMES == sorted(tts.MALE_NAMES) and all(n.startswith("zm_") for n in tts.MALE_NAMES) and set(tts.MALE_F0) == set(tts.MALE_SIDS)
+    assert tts.clean_style(3, "robot", 0.5) == (68, "robot", 0.5), "a female speaker (sid 3) is never accepted"
+    assert tts.clean_style(999, "echo!", 7) == (68, "scifi", 1.0) and tts.clean_style("x", None, -2) == (68, "scifi", 0.0)
+    assert tts.clean_style(101, "off", 0.25) == (101, "off", 0.25)
+    config.update(voice_speaker=None, voice_fx=None)
+    assert tts.configured_style() == (68, "scifi", 1.0), "an existing config keeps exactly the old voice"
+    config.update(voice_speaker=101, voice_fx={"mode": "robot", "amount": 0.5})
+    assert tts.configured_style() == (101, "robot", 0.5)
+    config.update(voice_speaker=5, voice_fx="garbage")
+    assert tts.configured_style() == (68, "scifi", 1.0), "a damaged setting falls back to the default"
+    config.update(voice_speaker=None, voice_fx=None)
+
+    calls = []
+
+    class Engine:
+        sample_rate = 24000
+
+        def generate(self, text, sid=0, speed=1.0):
+            calls.append((sid, speed))
+            t = np.arange(12000) / 24000
+            return types.SimpleNamespace(samples=(0.5 * np.sin(2 * np.pi * 110 * t) * (1 + 0.5 * np.sin(2 * np.pi * 3 * t))).astype(np.float32), sample_rate=24000)
+    base = Engine().generate("x").samples
+    calls.clear()
+    old_style = list(tts.Speaker(engine=Engine()).synth("你好。"))[0]
+    assert np.array_equal(old_style, tts.scifi(base, 24000, 1.0)) and calls == [(68, 1.0)], "default output is bit-for-bit what it was"
+    config.update(voice_speaker=101, voice_fx={"mode": "robot", "amount": 1.0})
+    calls.clear()
+    sp = tts.Speaker(engine=Engine())
+    new_style = list(sp.synth("你好。"))[0]
+    assert calls == [(101, 1.0)] and sp.info["speaker_name"] == "zm_098" and "机械效果 100%" in sp.info["label"], (calls, sp.info)
+    assert not np.array_equal(new_style, old_style), "a different effect really changes the sound"
+    assert all(spd == 1.0 for _, spd in calls), "the voice is never changed by slowing it down"
+    config.update(voice_speaker=None, voice_fx=None)
+
+    def mod_at(y, hz=tts.ROBOT_HZ, sr=24000):                  # energy of the loudness envelope at the robot carrier frequency
+        env = np.abs(y) - np.abs(y).mean()
+        return float(np.abs(np.fft.rfft(env * np.hanning(len(env))))[int(hz * len(env) / sr)])
+    loud = (np.random.default_rng(1).normal(0, 1, 24000 * 6) * 5).astype(np.float32)              # absurdly hot input
+    voiced = (0.5 * np.sin(2 * np.pi * 110 * np.arange(24000 * 6) / 24000)).astype(np.float32)
+    for mode in tts.FX_MODES:
+        for amount in (0.0, 0.3, 1.0):
+            for sig in (loud, voiced):
+                y = tts.apply_fx(sig, 24000, mode, amount)
+                assert y.dtype == np.float32 and np.isfinite(y).all() and float(np.abs(y).max()) <= 0.9001 and len(y) == len(sig), (mode, amount)
+    assert np.array_equal(tts.apply_fx(voiced, 24000, "robot", 0.0), tts.limit(voiced)), "strength 0 is no effect"
+    m0, m3, m10 = (mod_at(tts.apply_fx(voiced, 24000, "robot", a)) for a in (0.0, 0.3, 1.0))
+    assert m3 > 1000 * max(m0, 1e-6) and m10 > 1000 * max(m0, 1e-6), (m0, m3, m10)       # the effect is clearly there at 30% and at 100%
+    assert mod_at(tts.apply_fx(voiced, 24000, "robot", 1.0)) > 10 * mod_at(tts.apply_fx(voiced, 24000, "scifi", 1.0)), "robot is far more mechanical than the echo"
+    t0 = time.time()
+    tts.apply_fx(voiced, 24000, "robot", 1.0)
+    assert time.time() - t0 < 0.5, "six seconds of speech are processed in well under half a second"
+
+    # the panel's messages: preview does not save, use saves, reset restores, bad speakers are not accepted
+    models.LANG = "zh"
+    spoken = []
+
+    class FakeKokoro(tts.Speaker):
+        def __init__(self):
+            self.tts = Engine()
+            self.speed = 1.0
+            self.configure(*tts.configured_style())
+    s = make_service(FakeKokoro())
+    s.say = lambda text, **kw: spoken.append((text, kw))
+    s.voice_info = lambda: {"type": "voice", "style": {"speaker": s.speaker.voice}}
+    s.voice_msg({"type": "voice_preview", "speaker": 101, "fx": "robot", "amount": 100})
+    assert config.get("voice_speaker") is None and config.get("voice_fx") is None and s.speaker.voice == 68, "a preview saves nothing"
+    assert spoken[-1][0] == service.Service.PREVIEW_LINE and spoken[-1][1]["remember"] is False
+    trial = spoken[-1][1]["speaker"]
+    assert (trial.voice, trial.mode, trial.amount) == (101, "robot", 1.0)
+    s.voice_msg({"type": "voice_style", "speaker": 63, "fx": "robot", "amount": 60})
+    assert config.get("voice_speaker") == 63 and config.get("voice_fx") == {"mode": "robot", "amount": 0.6} and s.speaker.voice == 63
+    assert any(m["type"] == "voice_style" and m["stage"] == "saved" and "zm_014" in m["text"] for m in s.sent)
+    s.voice_msg({"type": "voice_style", "speaker": 3, "fx": "robot", "amount": 40})                  # sid 3 is a female speaker
+    assert config.get("voice_speaker") == 68 and s.speaker.voice == 68, "only the model's male speakers are ever used"
+    s.voice_msg({"type": "voice_style_reset"})
+    assert config.get("voice_speaker") is None and config.get("voice_fx") is None and s.speaker.mode == "scifi" and s.speaker.amount == 1.0
+    assert any(m["type"] == "voice_style" and m["stage"] == "reset" for m in s.sent)
+    s = make_service(tts.SystemSpeaker("Tingting"))
+    s.say = lambda *a, **k: None
+    s.voice_msg({"type": "voice_style", "speaker": 63, "fx": "robot", "amount": 60})
+    assert any(m["type"] == "voice_error" and "Kokoro" in m["text"] for m in s.sent) and config.get("voice_speaker") is None
+    s = make_service(FakeKokoro())
+    del s.__dict__["engine"]
+    s.engine = FakeEngine()
+    info = service.Service.voice_info(s)
+    assert info["style"]["speaker"] == 68 and len(info["style"]["speakers"]) == 45 and info["style"]["default"] == {"speaker": 68, "fx": "scifi", "amount": 1.0}
+    models.LANG = "en"
+
     # -- why the language model could not be reached
     import urllib.error
     assert "密钥无效" in brain.llm_reason(urllib.error.HTTPError("u", 401, "x", {}, None))

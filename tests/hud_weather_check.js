@@ -88,7 +88,8 @@ const assert = require('assert');
   assert((await text('#stateText')).includes('Hey Jarvis') || true);
   await p.evaluate(() => voiceInfo({ type: 'voice', lang: 'zh', reply_lang: 'zh', wake_word: '嗨，贾维斯', wake: '关键词识别（wenetspeech KWS）+ 文字确认，本机离线',
     stt: 'SenseVoice（中/英/日/韩/粤），本机离线', stt_last: 'SenseVoice（中/英/日/韩/粤）', tts: { engine: 'kokoro', label: 'Kokoro 多语言 v1.1（本机离线）', lang: '中文' },
-    brain: 'deepseek · deepseek-chat（只发送识别出的文字）', other_ready: true, other_missing: [], tts_mode: 'auto', system_voices: [] }));
+    brain: 'deepseek · deepseek-chat（只发送识别出的文字）', other_ready: true, other_missing: [], tts_mode: 'auto', system_voices: [],
+    style: { speaker: 68, fx: 'scifi', amount: 1, default: { speaker: 68, fx: 'scifi', amount: 1 }, speakers: Array.from({ length: 45 }, (_, i) => ({ sid: 58 + i, name: 'zm_' + String(i + 9).padStart(3, '0'), f0: 100 + i })) } }));
   assert((await text('#stateText')).includes('嗨，贾维斯'), 'idle hint uses the Chinese wake phrase: ' + await text('#stateText'));
   assert((await p.getAttribute('#cmd', 'placeholder')).includes('嗨，贾维斯'));
   assert((await text('#subtitle')).length >= 0 && await p.evaluate(() => WAKE) === '嗨，贾维斯');
@@ -100,6 +101,22 @@ const assert = require('assert');
   const vb = await text('#voiceBox');
   for (const x of ['中文（回答：中文）', '嗨，贾维斯', 'SenseVoice', 'Kokoro 多语言 v1.1（本机离线）（中文）', 'deepseek-chat', '只有识别出的文字']) assert(vb.includes(x), 'voice panel lacks ' + x + ': ' + vb);
   assert(await p.isDisabled('#vbLangBtns button[data-l="zh"]') && !(await p.isDisabled('#vbLangBtns button[data-l="en"]')));
+  // the Chinese male voice and the mechanical effect: 45 real speakers, current one selected, preview does not save, reset is there
+  assert(await p.isVisible('#vbStyle'));
+  assert.strictEqual(await p.evaluate(() => document.querySelectorAll('#vbSpk option').length), 45);
+  assert.strictEqual(await p.inputValue('#vbSpk'), '68');
+  assert((await p.textContent('#vbSpk option[value="68"]')).includes('默认'));
+  await p.evaluate(() => { window.__sent.length = 0; });
+  await p.selectOption('#vbSpk', '101'); await p.selectOption('#vbFx', 'robot');
+  await p.evaluate(() => { const a = document.getElementById('vbAmt'); a.value = 60; a.dispatchEvent(new Event('input')); });
+  assert((await text('#vbAmtV')).includes('60%'));
+  await click('#vbPrev'); await click('#vbUse'); await click('#vbReset');
+  assert.deepStrictEqual(await p.evaluate(() => window.__sent), [{ type: 'voice_preview', speaker: 101, fx: 'robot', amount: 60 }, { type: 'voice_style', speaker: 101, fx: 'robot', amount: 60 }, { type: 'voice_style_reset' }]);
+  await p.selectOption('#vbFx', 'off');
+  assert(await p.isDisabled('#vbAmt'), 'no strength slider when the effect is off');
+  await p.evaluate(() => voiceStyleMsg({ stage: 'reset', text: '已恢复默认声音（zm_029，轻回声）。' }));
+  assert((await text('#vbMsg')).includes('已恢复默认声音'));
+  await shot('7a-voice-style');
   await p.evaluate(() => { window.__sent.length = 0; });
   await click('#vbLangBtns button[data-l="en"]');
   await p.selectOption('#vbTts', 'system'); await click('#vbTest');

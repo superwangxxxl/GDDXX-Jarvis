@@ -34,6 +34,7 @@ def stop(p):
             p.wait(5)
         except subprocess.TimeoutExpired:
             p.kill()
+            p.wait(2)               # reaped: a service that outlives the window would keep the port for the next launch
 
 
 def main():

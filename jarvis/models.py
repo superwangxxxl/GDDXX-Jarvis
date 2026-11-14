@@ -67,9 +67,22 @@ def vad(threshold=0.5, min_silence=0.45):
     return sherpa_onnx.VoiceActivityDetector(cfg, buffer_size_in_seconds=60)
 
 
+def en_wake_ready():
+    """The small openWakeWord files used for acoustic “Hey Jarvis” (independent of Parakeet/Piper)."""
+    return all((EN_WAKE_DIR / n).exists() for n in ("hey_jarvis_v0.1.onnx", "melspectrogram.onnx", "embedding_model.onnx"))
+
+
 def wake(lang=None):
-    from .wakeword import HeyJarvis, SherpaKws
-    return HeyJarvis(EN_WAKE_DIR) if (lang or LANG) == "en" else SherpaKws(kws())
+    """English mode: openWakeWord only. Chinese mode: WenetSpeech KWS, plus openWakeWord when those
+    files are on disk, so “Hey Jarvis” works without switching voice_lang (replies stay reply_lang)."""
+    from .wakeword import DualWake, HeyJarvis, SherpaKws
+    lang = lang or LANG
+    if lang == "en":
+        return HeyJarvis(EN_WAKE_DIR)
+    zh = SherpaKws(kws())
+    if en_wake_ready():
+        return DualWake(zh, HeyJarvis(EN_WAKE_DIR))
+    return zh
 
 
 def asr(threads=2, lang=None):
