@@ -5,7 +5,9 @@ it is written readable by the current user only, and nothing in Jarvis ever uplo
     "name": "sir",                       how Jarvis addresses the user
     "reply_lang": "en",                  en = English voice with a Chinese subtitle (default) · zh = Chinese
     "llm":   {"provider": "deepseek", "base_url": "...", "api_key": "...", "model": "..."},
-    "amap":  {"key": "..."},             optional: weather and routes in China (plugin amap)
+    "amap":  {"key": "..."},             optional: routes in China (plugin amap)
+    "weather": {"mode": "device" | "city", "city": {...}},   weather: device location (default) or a chosen city (plugin weather)
+    "dingtalk": {"dws_path": "/abs/path/to/dws", "timeout": 20},   optional: read-only DingTalk minutes through your own dws (plugin dingtalk)
     "harness": {"path": "..."},          optional: DeepSeek Harness command-line path (plugin harness)
     "plugins": {"mihome": true, ...},    optional: switch plugins off
     "workspace": "~/Desktop/Jarvis 作品"

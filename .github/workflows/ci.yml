@@ -24,6 +24,11 @@ jobs:
       - run: python -m compileall -q jarvis app tests
       - name: brain and onboarding (fake model server)
         run: python tests/test_brain.py
+      - name: weather and DingTalk read-only (fake network, fake location, fake dws)
+        run: python tests/test_weather.py
+      - name: DingTalk read-only plugin (fake dws)
+        if: runner.os != 'Windows'
+        run: python tests/test_dingtalk.py
       - name: every module imports
         run: python -c "import jarvis.service, jarvis.gesture, jarvis.onboard, jarvis.tools as t; print(sorted(t.names()))"
 
@@ -57,6 +62,7 @@ jobs:
         with: {node-version: "22"}
       - run: npm i playwright@1.48.2 && npx playwright install --with-deps chromium
       - run: (cd hud && python3 -m http.server 8811 &) && sleep 2 && node tests/hud_check.js http://127.0.0.1:8811/index.html
+      - run: (cd hud && python3 -m http.server 8812 &) && sleep 2 && node tests/hud_weather_check.js http://127.0.0.1:8812/index.html
 
   build:
     # installers: built on every PR (to keep the scripts working) and on v* tags (published by the release job)
