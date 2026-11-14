@@ -45,16 +45,23 @@ done < "$HERE/manifest.txt"
 if [ $BAD = 1 ] && [ $FORCE = 0 ]; then die "installed files differ from 2.0.4 (use --force to patch anyway; originals are backed up)"; fi
 [ $DRY = 1 ] && { say "dry run: $(wc -l < "$HERE/manifest.txt" | tr -d ' ') files would be copied into $RES"; exit 0; }
 
-# 2. backup
+# 2. backup: only files that are not already the patched version, so the backup always holds originals
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BK="$SUPPORT/patch-backup/$STAMP"
 mkdir -p "$BK/files"; chmod 700 "$SUPPORT/patch-backup" "$BK" 2>/dev/null || true
-: > "$BK/added.txt"
+: > "$BK/added.txt"; N=0
 while read -r st path new old; do
-  if [ "$st" = M ]; then mkdir -p "$BK/files/$(dirname "$path")"; cp -p "$RES/$path" "$BK/files/$path"; else echo "$path" >> "$BK/added.txt"; fi
+  if [ "$st" = M ]; then
+    [ "$(sha "$RES/$path")" = "$new" ] && continue
+    mkdir -p "$BK/files/$(dirname "$path")"; cp -p "$RES/$path" "$BK/files/$path"; N=1
+  else
+    [ -e "$RES/$path" ] && continue
+    echo "$path" >> "$BK/added.txt"; N=1
+  fi
 done < "$HERE/manifest.txt"
 echo "$APP" > "$BK/app.txt"
-say "backup of the original files: $BK"
+if [ $N = 0 ]; then rm -rf "$BK"; BK="$(ls -1d "$SUPPORT"/patch-backup/*/ 2>/dev/null | sort | tail -1 | sed 's:/$::')"; say "already patched: nothing new to back up"
+else say "backup of the original files: $BK"; fi
 
 # 3. copy
 while read -r st path new old; do
@@ -91,7 +98,8 @@ try:
     cfg = json.load(open(cfg_path, encoding="utf-8"))
 except Exception:
     cfg = {}
-json.dump({"dingtalk": cfg.get("dingtalk")}, open(os.path.join(os.environ["BK"], "config-sections.json"), "w"))
+if os.environ.get("BK") and os.path.isdir(os.environ["BK"]) and not os.path.exists(os.path.join(os.environ["BK"], "config-sections.json")):
+    json.dump({"dingtalk": cfg.get("dingtalk")}, open(os.path.join(os.environ["BK"], "config-sections.json"), "w"))
 cfg["dingtalk"] = {**(cfg.get("dingtalk") or {}), "dws_path": os.environ["DWS_PATH"]}
 tmp = cfg_path + ".tmp"
 open(tmp, "w", encoding="utf-8").write(json.dumps(cfg, ensure_ascii=False, indent=2))
