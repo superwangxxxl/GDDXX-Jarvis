@@ -1,6 +1,6 @@
-# 天气（设备定位）与钉钉只读听记 · 补丁说明
+# 天气（设备定位）与钉钉只读听记 · 补丁说明（含部署/回滚）
 
-适用：已安装的 Jarvis **2.0.4**（macOS）。本补丁基于官方 `v2.0.4` 标签（与官方 arm64 安装包里的 `jarvis/ hud/ app/` 逐文件一致，已核对），
+适用：已安装的 Jarvis **2.0.4**（macOS）。中文语音和“有波形但不回应”的排查见 [chinese-voice.md](chinese-voice.md)，同一个补丁包。本补丁基于官方 `v2.0.4` 标签（与官方 arm64 安装包里的 `jarvis/ hud/ app/` 逐文件一致，已核对），
 只新增或替换文件，不改上游、不改 `VERSION`、不改 `app/models.json`、不动语音模型、不动 `config.json` 里已有的 DeepSeek 配置、语音和记忆。
 
 > 本文只描述行为和做法，不含任何真实城市、坐标、公司内容、账号或密钥。示例里的路径、城市都是占位。
@@ -79,11 +79,11 @@ HUD 无语音服务时（浏览器直接打开）也不再回答“上海今天�
 
 ## 5. 部署与回滚（针对已安装的 2.0.4）
 
-补丁包：`jarvis-2.0.4-weather-dws-patch.tar.gz`（含 `install.sh`、`rollback.sh`、`manifest.txt`、`files/`），有 `.sha256`。
+补丁包：`jarvis-2.0.4-zh-weather-dws-patch.tar.gz`（含 `install.sh`、`rollback.sh`、`manifest.txt`、`files/`），有 `.sha256`。
 
 ```bash
-tar xzf jarvis-2.0.4-weather-dws-patch.tar.gz && cd jarvis-2.0.4-weather-dws-patch
-shasum -a 256 -c ../jarvis-2.0.4-weather-dws-patch.tar.gz.sha256      # 解包前先在压缩包所在目录校验
+tar xzf jarvis-2.0.4-zh-weather-dws-patch.tar.gz && cd jarvis-2.0.4-zh-weather-dws-patch
+shasum -a 256 -c ../jarvis-2.0.4-zh-weather-dws-patch.tar.gz.sha256      # 解包前先在压缩包所在目录校验
 ./install.sh --dry-run                                                # 只检查，不改动
 ./install.sh --dws "<你的 dws 绝对路径>"                              # 先退出 Jarvis；不要钉钉可以不带 --dws
 ```

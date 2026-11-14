@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build the deployable patch package for the installed Jarvis 2.0.4 from this checkout:
+# Build the deployable patch package (weather, DingTalk, Chinese voice) for the installed Jarvis 2.0.4 from this checkout:
 #   bash tools/mac-patch/make-patch.sh [output-dir]
 # It copies every file under jarvis/ hud/ app/ that differs from the v2.0.4 tag, records the sha256 of the v2.0.4 original
 # next to the new one (install.sh refuses to patch a file that is not the stock 2.0.4 one) and packs install/rollback.
@@ -7,7 +7,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${1:-$ROOT/dist}"
 BASE=v2.0.4
-NAME=jarvis-2.0.4-weather-dws-patch
+NAME=jarvis-2.0.4-zh-weather-dws-patch
 PKG="$OUT/$NAME"
 cd "$ROOT"
 git rev-parse -q --verify "$BASE^{commit}" >/dev/null || { echo "tag $BASE not found (git fetch --tags)"; exit 1; }
@@ -24,7 +24,7 @@ git diff --name-status "$BASE" HEAD -- jarvis hud app | while IFS=$'\t' read -r 
   esac
 done
 cp "$ROOT/tools/mac-patch/install.sh" "$ROOT/tools/mac-patch/rollback.sh" "$PKG/"; chmod 755 "$PKG/install.sh" "$PKG/rollback.sh"
-cp "$ROOT/docs/weather-dingtalk.md" "$PKG/README-中文.md"
+cp "$ROOT/docs/weather-dingtalk.md" "$PKG/README-中文.md"; cp "$ROOT/docs/chinese-voice.md" "$PKG/README-中文语音.md"
 echo "$BASE $(git rev-parse HEAD)" > "$PKG/BASE"
 (cd "$OUT" && tar czf "$NAME.tar.gz" "$NAME")
 (cd "$OUT" && { sha256sum "$NAME.tar.gz" 2>/dev/null || shasum -a 256 "$NAME.tar.gz"; } > "$NAME.tar.gz.sha256")

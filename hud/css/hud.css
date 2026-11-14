@@ -248,6 +248,23 @@ button{font:inherit;color:inherit}
 .wx-cities{list-style:none;margin:0 0 6px;padding:0;display:flex;flex-direction:column;gap:4px}
 .wx-cities button{width:100%;text-align:left}
 .wx-note{line-height:1.5;color:var(--ink-3)}
+#voiceErr{position:fixed;left:50%;transform:translateX(-50%);top:72px;z-index:999;max-width:60vw;padding:6px 14px;border:1px solid rgba(255,174,107,.6);border-radius:14px;background:rgba(var(--sk-pnl),.92);color:#FFC27A;font-size:12.5px;line-height:1.4;cursor:pointer}
+#voiceErr[hidden]{display:none}
+#voiceBox{position:fixed;right:24px;top:64px;width:420px;max-width:calc(100vw - 48px);z-index:40;padding:12px 14px;background:rgba(var(--sk-pnl),.96);border:1px solid var(--line-2);border-radius:10px;font-size:13px;color:var(--ink-2);box-shadow:0 8px 30px rgba(0,0,0,.45)}
+#voiceBox[hidden]{display:none}
+#voiceBox .vb-top{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);margin-bottom:8px}
+#voiceBox .vb-top .pip{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+#voiceBox .vb-x{margin-left:auto;background:none;border:0;color:var(--ink-3);font-size:18px;cursor:pointer}
+#voiceBox .vb-rows{margin:0 0 8px}
+#voiceBox .vb-rows div{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px;padding:3px 0;border-bottom:1px solid var(--line)}
+#voiceBox dt{color:var(--ink-3)}#voiceBox dd{margin:0;color:var(--ink);word-break:break-word}
+#voiceBox .vb-row{display:flex;align-items:center;gap:8px;margin:8px 0}
+#voiceBox .vb-row > span:first-child{min-width:76px;color:var(--ink-3)}
+#voiceBox button,#voiceBox select{background:rgba(var(--sk-pri),.14);border:1px solid var(--line-2);border-radius:5px;color:var(--ink);padding:4px 10px;font-size:12px;cursor:pointer}
+#voiceBox select option{background:#0a1720}
+#voiceBox button:disabled{opacity:.5;cursor:default}
+#voiceBox .vb-msg{min-height:1.4em;color:var(--cyan);word-break:break-word}#voiceBox .vb-msg.bad{color:#FFC27A}
+#voiceBox .vb-note{margin-top:6px;font-size:11.5px;line-height:1.5;color:var(--ink-3)}
 #dwsCard{position:fixed;left:24px;bottom:132px;width:340px;z-index:30;padding:12px 14px;background:rgba(var(--sk-pnl),.94);border:1px solid var(--line-2);border-radius:10px;font-size:13px;color:var(--ink-2);box-shadow:0 8px 30px rgba(0,0,0,.45)}
 #dwsCard[hidden]{display:none}
 #dwsCard .dws-top{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:1px;margin-bottom:8px}

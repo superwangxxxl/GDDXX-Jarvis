@@ -23,7 +23,7 @@
     <div class="motto"><span>随时待命，只为你一人</span><i></i></div>
     <span class="grow"></span>
     <div class="stats">
-      <span>LOCAL<b class="on">● ON</b></span>
+      <span>本机<b class="on">● 运行</b></span>
       <span>CPU<b id="cpu">--</b></span>
       <span>MEM<b id="mem">57%</b></span>
       <span>NET<b>⇅ <span id="net">6.1MB/s</span></b></span>
@@ -35,7 +35,7 @@
       <button class="icon-btn" type="button" aria-label="开始说话" id="btnMic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
       <button class="icon-btn" type="button" aria-label="隐私：数据仅存本地" id="btnShield"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"></path><path d="M12 8.5l3 1.75v3.5L12 15.5l-3-1.75v-3.5z"></path></svg></button>
       <div class="menu-wrap"><button class="icon-btn" type="button" aria-label="菜单" aria-expanded="false" id="btnMenu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M4 12h11M4 17h16"></path></svg></button>
-        <div class="menu-pop" id="menuPop" hidden><button type="button" id="btnVoice" aria-pressed="true">语音播报<b>开</b></button></div></div>
+        <div class="menu-pop" id="menuPop" hidden><button type="button" id="btnVoice" aria-pressed="true">语音播报<b>开</b></button><button type="button" id="btnLang">语言与语音<b>设置</b></button></div></div>
     </div>
   </header>
 
@@ -111,7 +111,7 @@
       <form class="bar-in" id="form" autocomplete="off">
         <label for="cmd" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">对贾维斯说</label>
         <input id="cmd" type="text" placeholder="说点什么，或按住空格说话">
-        <span class="kbd">HOLD SPACE</span>
+        <span class="kbd">按住空格说话</span>
         <button class="mic" type="button" id="mic" aria-label="开始说话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
       </form>
       </div>

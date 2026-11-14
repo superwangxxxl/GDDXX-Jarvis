@@ -78,7 +78,7 @@ function typeOut(who, text, speed = 45, done, zh) {
   const entry = { who, en: String(text || ''), zh: zh ? String(zh) : '', t: Date.now() };
   const last = SUBS.log[SUBS.log.length - 1];
   if (last && last.who === who && last.en === entry.en && Date.now() - last.t < 4000) SUBS.log.pop();   /* the same line sent twice */
-  if (/说 “Hey Jarvis” 就可以跟我说话/.test(entry.en)) entry.boot = true;   /* the start-up greeting is shown, not kept */
+  if (/就可以跟我说话，也可以在下面打字/.test(entry.en)) entry.boot = true;   /* the start-up greeting is shown, not kept */
   SUBS.log.push(entry); if (SUBS.log.length > SUBS_KEEP) SUBS.log.shift();
   subsSave();
   SUBS.at = SUBS.log.length - 1; SUBS.page = 0; SUBS.live = true;

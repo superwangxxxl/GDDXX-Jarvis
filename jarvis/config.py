@@ -3,7 +3,9 @@ it is written readable by the current user only, and nothing in Jarvis ever uplo
 
   {
     "name": "sir",                       how Jarvis addresses the user
-    "reply_lang": "en",                  en = English voice with a Chinese subtitle (default) · zh = Chinese
+    "voice_lang": "en",                  language of the speech models: en (default) or zh (Chinese wake word, recognition, voice)
+    "reply_lang": "en",                  en = English voice with a Chinese subtitle · zh = Chinese (follows voice_lang when unset)
+    "voice_tts": "auto",                 Chinese voice: auto | local (Kokoro model) | system (macOS voice); "system_voice": a name from `say -v ?`
     "llm":   {"provider": "deepseek", "base_url": "...", "api_key": "...", "model": "..."},
     "amap":  {"key": "..."},             optional: routes in China (plugin amap)
     "weather": {"mode": "device" | "city", "city": {...}},   weather: device location (default) or a chosen city (plugin weather)
@@ -80,6 +82,22 @@ def llm():
     return (os.environ.get("JARVIS_LLM_BASE_URL") or c.get("base_url"),
             os.environ.get("JARVIS_LLM_API_KEY") or c.get("api_key", ""),
             os.environ.get("JARVIS_LLM_MODEL") or c.get("model", ""))
+
+
+RUNTIME = {}        # set by the voice service when it had to start in another language than configured
+
+
+def voice_lang():
+    """The language of the speech models: "en" (default) or "zh". Needs a restart of the voice service to change."""
+    v = RUNTIME.get("voice_lang") or os.environ.get("JARVIS_LANG") or get("voice_lang") or "en"
+    return "zh" if v == "zh" else "en"
+
+
+def reply_lang():
+    """The language Jarvis answers in. Follows the voice language unless reply_lang is set (en = English voice with a
+    Chinese subtitle, the original default)."""
+    v = get("reply_lang")
+    return v if v in ("en", "zh") else ("zh" if voice_lang() == "zh" else "en")
 
 
 def plugin_on(name, default=True):

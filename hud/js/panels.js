@@ -57,7 +57,7 @@ function renderSched() {
   const fi = cur >= 0 ? cur : next;
   const timed = SCHED.map((s, i) => `<li class="${s[4] ? 'past' : i === fi ? 'focus' : toMin(s[1]) <= now ? 'past' : ''}"><i></i><span class="t">${s[0]}${s[5] === false ? '' : ' – ' + s[1]}${i === fi && !s[4] ? '<span class="arr">→</span>' : ''}</span><span><b>${escapeHtml(s[2])}${s[4] ? ' ✓' : ''}</b><span>${escapeHtml(s[3] || '')}</span></span></li>`);
   const untimed = TODO.map(t => `<li class="${t.done ? 'past' : ''}"><i></i><span class="t">待办</span><span><b>${escapeHtml(t.title)}${t.done ? ' ✓' : ''}</b><span>${escapeHtml(t.note || '')}</span></span></li>`);
-  $('#sched').innerHTML = timed.concat(untimed).join('') || '<li><i></i><span class="t">今天</span><span><b>还没有安排</b><span>说 “Hey Jarvis”，告诉我今天要做什么</span></span></li>';
+  $('#sched').innerHTML = timed.concat(untimed).join('') || `<li><i></i><span class="t">今天</span><span><b>还没有安排</b><span>说 “${WAKE}”，告诉我今天要做什么</span></span></li>`;
 }
 /* the real day plan from the voice service replaces the demo data */
 function applySchedule(items) {
@@ -116,9 +116,9 @@ function wxRender() {
     const d = (m.days || [])[i];
     days[i].innerHTML = d ? `${label[i] || WD[+d.week % 7]}${WX_ICON[wxKind(d.day)]}<b>${d.low}°/${d.high}°</b>` : `${label[i]}<span class="wx-ph">--</span><b>--</b>`;
   }
-  const how = m.location_source === 'device' ? '设备定位' : '手动选择城市';
+  const how = m.location_source === 'device' ? '设备定位' + (m.located_hm ? `（${m.located_hm} 定位）` : '') : '手动城市（不是设备位置，不会跟随你移动）';
   src.textContent = `来源 ${m.source} · ${how} · 更新 ${m.observed_hm}（${wxAge(age)}）` + (m.stale ? ' · 刷新失败，沿用旧数据' : '');
-  src.title = `数据观测时间 ${m.observed_hm}（当地时间）；本机拉取于 ${m.fetched_hm}。空气质量为模型估算（US AQI）。`;
+  src.title = `数据观测时间 ${m.observed_hm}（当地时间）；本机拉取于 ${m.fetched_hm}。` + (m.accuracy_m ? `定位精度约 ${m.accuracy_m} 米。` : '') + '空气质量为模型估算（US AQI）。';
   src.classList.toggle('warn', !!m.stale);
 }
 function wxUpdate(m) { wxLive = true; wxMsg = m; wxRender(); }

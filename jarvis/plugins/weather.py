@@ -269,7 +269,12 @@ def current(force=False, relocate=False, wait=100):
     loc = _device(relocate, wait)
     if not loc.get("ok"):
         return unavailable(loc.get("reason", "unavailable"), loc.get("message", ""), mode, loc.get("detail", ""))
-    return _weather_for(loc["lat"], loc["lon"], loc.get("name") or "当前位置", "device", mode, force)
+    m = _weather_for(loc["lat"], loc["lon"], loc.get("name") or "当前位置", "device", mode, force)
+    if m.get("status") == "ok":                       # when and how well the Mac located itself (not the coordinates)
+        m["located_epoch"], m["located_hm"] = loc["at"], time.strftime("%H:%M", time.localtime(loc["at"]))
+        if isinstance(loc.get("accuracy"), (int, float)) and loc["accuracy"] >= 0:
+            m["accuracy_m"] = round(loc["accuracy"])
+    return m
 
 
 def push(force=False, relocate=False):
@@ -350,7 +355,7 @@ def get_weather(city=""):
         w = _weather_for(c["lat"], c["lon"], c["label"], "named", "named")
         return tool_result(w, "the city the user asked about")
     w = current(wait=25)
-    return tool_result(w, "this Mac's location" if w.get("location_source") == "device" else "the city the user chose")
+    return tool_result(w, "this Mac's location" if w.get("location_source") == "device" else "a city the user picked by hand (NOT this Mac's location)")
 
 
 TOOL = {"type": "function", "function": {

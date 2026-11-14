@@ -31,6 +31,8 @@ old = json.load(open(os.path.join(os.environ["BK"], "config-sections.json")))
 for k, v in old.items():
     cfg.pop(k, None) if v is None else cfg.__setitem__(k, v)
 cfg.pop("weather", None)
+for k in ("voice_tts", "system_voice"):
+    cfg.pop(k, None)
 tmp = os.environ["CFG"] + ".tmp"
 open(tmp, "w", encoding="utf-8").write(json.dumps(cfg, ensure_ascii=False, indent=2)); os.chmod(tmp, 0o600); os.replace(tmp, os.environ["CFG"])
 PYEOF

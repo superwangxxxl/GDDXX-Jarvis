@@ -252,7 +252,7 @@ class VoiceEngine:
                 cmd = ""            # the command runs past what was transcribed; ask for it instead
             if os.environ.get("JARVIS_DEBUG_HEARD", "1") == "1":
                 print("heard (standby):", heard, flush=True)
-                self.emit("heard", {"text": heard})
+                self.emit("heard", {"text": heard, "wake": bool(woke)})
             if not woke:
                 return
             if self._vp(samples[: int(3.0 * models.SR)], "wake (heard)") is False:
@@ -289,7 +289,7 @@ class VoiceEngine:
                 woke_in, after = split_wake(text, trusted=holds_wake)
                 # "Hey Jarvis." alone leaves nothing after the wake word: that is not a command
                 cmd = WAKE_REMNANT.sub("", after if woke_in else text).strip(" ,.!?，。！？")
-                if holds_wake and re.search(r"[\u4e00-\u9fff]", cmd):
+                if holds_wake and models.LANG == "en" and re.search(r"[\u4e00-\u9fff]", cmd):
                     # Chinese after an English wake word ("嘿E JARIS 把台灯打开"): transcribe only what
                     # came after the detector fired, so the garbled wake is not part of the request
                     rest = samples[int(max(0.0, self.woke_at - start) * models.SR):]

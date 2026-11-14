@@ -6,7 +6,7 @@ let live = null;
 function connectVoice() {
   let ws;
   try { ws = new WebSocket('ws://127.0.0.1:8765'); } catch (_) { return setTimeout(connectVoice, 3000); }
-  ws.onopen = () => { live = ws; document.body.dataset.live = '1'; input.placeholder = '说 “Hey Jarvis”，或在这里打字'; if (state === 'idle') stateText.textContent = '待命中 · 说 "Hey Jarvis"'; };
+  ws.onopen = () => { live = ws; document.body.dataset.live = '1'; input.placeholder = `说 “${WAKE}”，或在这里打字`; if (state === 'idle') stateText.textContent = `待命中 · 说 “${WAKE}”`; };
   ws.onclose = () => { if (live === ws) { live = null; delete document.body.dataset.live; } setTimeout(connectVoice, 3000); };
   ws.onerror = () => { try { ws.close(); } catch (_) {} };
   ws.onmessage = ev => {
@@ -17,7 +17,7 @@ function connectVoice() {
       const s = m.state === 'listening' ? 'listening' : m.state === 'thinking' ? 'thinking' : m.state === 'speaking' ? 'speaking' : 'idle';
       setState(s);
       if (s === 'listening' && !sub.textContent.trim()) sub.innerHTML = '<span class="who you">YOU</span><span style="color:var(--ink-3)">正在聆听…</span>';
-      if (s === 'idle') stateText.textContent = listening ? '待命中 · 说 "Hey Jarvis"' : '已暂停聆听 · 可以打字';
+      if (s === 'idle') stateText.textContent = listening ? `待命中 · 说 “${WAKE}”` : '已暂停聆听 · 可以打字';
     }
     else if (m.type === 'screen') { if (m.mode === 'awake') { dormHold = false; dormAsked = false; wakeUI(); sleepUI(30000); } else if (state === 'speaking' || state === 'thinking') dormAsked = true; else dormNow(); }
     else if (m.type === 'wake') { dormHold = false; wakeUI(); clearInterval(typeTimer); openTalk(); sub.innerHTML = '<span class="who you">YOU</span><span style="color:var(--ink-3)">正在聆听…</span>'; }
@@ -27,6 +27,9 @@ function connectVoice() {
     else if (m.type === 'level') meter(m.mic, m.wake);
     else if (m.type === 'sys') sysUpdate(m);
     else if (m.type === 'schedule') applySchedule(m.items || []);
+    else if (m.type === 'voice') voiceInfo(m);
+    else if (m.type === 'voice_error') voiceError(m);
+    else if (m.type === 'voice_switch') voiceSwitch(m);
     else if (m.type === 'weather') wxUpdate(m);
     else if (m.type === 'weather_cities') wxCities(m);
     else if (m.type === 'dingtalk_minutes') dingtalkShow(m);
@@ -47,7 +50,7 @@ function connectVoice() {
     else if (m.type === 'em') { if (window.emMsg) emMsg(m); }
     else if (m.type === 'hand') handMsg(m);
     else if (m.type === 'hand_frame') handFrame(m);
-    else if (m.type === 'heard') { meterHeard.textContent = '听到：' + (m.text || '…'); }
+    else if (m.type === 'heard') { meterHeard.textContent = '听到：' + (m.text || '…') + (m.wake === false ? `（不含唤醒词“${WAKE}”，没有响应）` : '') + (m.stt ? ` · ${m.stt.split('（')[0]}` : ''); meterHeard.classList.toggle('warn', m.wake === false); }
     else if (m.type === 'rejected') { meterHeard.textContent += '（不是唤醒词）'; }
     else if (m.type === 'listen') { document.body.dataset.listen = '1'; listenShow(m.on !== false); }   /* the service supports 暂停聆听 */
     else if (m.type === 'mic') { meterHeard.textContent = m.ok ? '' : m.text; meterHeard.classList.toggle('warn', !m.ok); }
@@ -58,7 +61,7 @@ function connectVoice() {
 /* small live meter: shows the mic is picking up sound and how close it came to "Hey Jarvis" */
 const meterBox = document.createElement('div');
 meterBox.id = 'voiceMeter';
-meterBox.innerHTML = '<span class="ml">MIC</span><span class="mbar"><i id="micBar"></i></span><span class="ml">WAKE</span><span class="mbar"><i id="wakeBar"></i></span><span id="meterHeard"></span>';
+meterBox.innerHTML = '<span class="ml">麦克风</span><span class="mbar"><i id="micBar"></i></span><span class="ml">唤醒</span><span class="mbar"><i id="wakeBar"></i></span><span id="meterHeard"></span>';
 document.body.appendChild(meterBox);
 const micBar = meterBox.querySelector('#micBar'), wakeBar = meterBox.querySelector('#wakeBar'), meterHeard = meterBox.querySelector('#meterHeard');
 let wakeHold = 0;
@@ -89,7 +92,7 @@ function listenShow(on) {
   ['#mic', '#btnMic'].forEach(q => { const b = document.querySelector(q); if (b) b.setAttribute('aria-label', on ? '暂停聆听' : '恢复聆听'); });
   meterHeard.classList.remove('warn');
   meterHeard.textContent = on ? '' : '已暂停聆听，再按一次恢复';
-  if (state === 'idle') stateText.textContent = on ? '待命中 · 说 "Hey Jarvis"' : '已暂停聆听 · 可以打字';
+  if (state === 'idle') stateText.textContent = on ? `待命中 · 说 “${WAKE}”` : '已暂停聆听 · 可以打字';
   if (!on) micBar.style.width = wakeBar.style.width = '0%';
 }
 function listenToggle() { liveSend({ type: 'listen', on: !listening }); }
@@ -101,7 +104,7 @@ addEventListener('keydown', e => {
       && !(t && (/INPUT|TEXTAREA|SELECT/.test(t.tagName) || t.isContentEditable))) { e.preventDefault(); listenToggle(); }
 });
 listenShow(true);
-startListen = () => { if (!live) return demoStart(); openTalk(); clearInterval(typeTimer); sub.innerHTML = '<span class="who">JARVIS</span>直接说 “Hey Jarvis”，我一直在听。'; };
+startListen = () => { if (!live) return demoStart(); openTalk(); clearInterval(typeTimer); sub.innerHTML = `<span class="who">JARVIS</span>直接说 “${WAKE}”，我一直在听。`; };
 ['#mic', '#btnMic'].forEach(q => { const b = document.querySelector(q); if (b) b.addEventListener('click', e => { if (live) { e.stopImmediatePropagation(); listenToggle(); } }, true); });
 stopListen = () => { if (!live) demoStop(); };
 connectVoice();

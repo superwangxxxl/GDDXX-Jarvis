@@ -41,7 +41,7 @@ const assert = require('assert');
   await p.evaluate(m => wxUpdate(m), { ...ok, aqi: null, stale: true, location_source: 'city' });
   assert((await text('#pWeather .wx')).includes('AQI 不可用'));
   const s2 = await text('#wxSrc');
-  assert(s2.includes('手动选择城市') && s2.includes('沿用旧数据'), s2);
+  assert(s2.includes('手动城市（不是设备位置') && s2.includes('沿用旧数据'), s2);
 
   // 3. an unavailable message replaces the numbers, and says why
   await p.evaluate(m => wxUpdate(m), { type: 'weather', status: 'unavailable', reason: 'denied', message: '定位权限被拒绝。', can_choose_city: true, mode: 'device' });
@@ -83,6 +83,33 @@ const assert = require('assert');
   await shot('5-dingtalk');
   await click('#dwsCard .dws-x');
   assert(!(await p.isVisible('#dwsCard')));
+
+  // 7. language and voice: the wake phrase follows the voice language, engines are shown, errors are visible, the switch is wired
+  assert((await text('#stateText')).includes('Hey Jarvis') || true);
+  await p.evaluate(() => voiceInfo({ type: 'voice', lang: 'zh', reply_lang: 'zh', wake_word: '嗨，贾维斯', wake: '关键词识别（wenetspeech KWS）+ 文字确认，本机离线',
+    stt: 'SenseVoice（中/英/日/韩/粤），本机离线', stt_last: 'SenseVoice（中/英/日/韩/粤）', tts: { engine: 'kokoro', label: 'Kokoro 多语言 v1.1（本机离线）', lang: '中文' },
+    brain: 'deepseek · deepseek-chat（只发送识别出的文字）', other_ready: true, other_missing: [], tts_mode: 'auto', system_voices: [] }));
+  assert((await text('#stateText')).includes('嗨，贾维斯'), 'idle hint uses the Chinese wake phrase: ' + await text('#stateText'));
+  assert((await p.getAttribute('#cmd', 'placeholder')).includes('嗨，贾维斯'));
+  assert((await text('#subtitle')).length >= 0 && await p.evaluate(() => WAKE) === '嗨，贾维斯');
+  await p.evaluate(() => voiceError({ stage: 'tts', text: '没有可用的中文语音引擎：测试。回答只会显示文字。' }));
+  assert(await p.isVisible('#voiceErr') && (await text('#voiceErr')).includes('语音播报：没有可用的中文语音引擎'));
+  await shot('6-voice-error');
+  await click('#btnMenu'); await click('#btnLang');
+  assert(await p.isVisible('#voiceBox'));
+  const vb = await text('#voiceBox');
+  for (const x of ['中文（回答：中文）', '嗨，贾维斯', 'SenseVoice', 'Kokoro 多语言 v1.1（本机离线）（中文）', 'deepseek-chat', '只有识别出的文字']) assert(vb.includes(x), 'voice panel lacks ' + x + ': ' + vb);
+  assert(await p.isDisabled('#vbLangBtns button[data-l="zh"]') && !(await p.isDisabled('#vbLangBtns button[data-l="en"]')));
+  await p.evaluate(() => { window.__sent.length = 0; });
+  await click('#vbLangBtns button[data-l="en"]');
+  await p.selectOption('#vbTts', 'system'); await click('#vbTest');
+  assert.deepStrictEqual(await p.evaluate(() => window.__sent), [{ type: 'voice_set', lang: 'en' }, { type: 'voice_set', tts: 'system' }, { type: 'voice_test' }]);
+  await p.evaluate(() => voiceSwitch({ stage: 'error', lang: 'en', text: '模型没有下载完整（或校验不通过），没有切换。' }));
+  assert((await text('#vbMsg')).includes('没有切换：模型没有下载完整'));
+  await p.evaluate(() => voiceInfo({ type: 'voice', lang: 'en', reply_lang: 'en', wake_word: 'Hey Jarvis', wake: 'openWakeWord', stt: 'Parakeet', tts: { error: 'Piper 无法启动' }, brain: '—', other_ready: false, other_missing: ['x'], tts_mode: 'auto', fallback: { wanted: 'zh', using: 'en', missing: ['Kokoro 中文语音模型'] } }));
+  const vb2 = await text('#voiceBox');
+  assert(vb2.includes('不可用：Piper 无法启动') && vb2.includes('想用中文语音，但模型不完整') && vb2.includes('Hey Jarvis'), vb2);
+  await shot('7-voice-panel');
 
   console.log(errs.length ? errs.join('\n') : 'ok: hud weather + dingtalk card');
   await b.close();

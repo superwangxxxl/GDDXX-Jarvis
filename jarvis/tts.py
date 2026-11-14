@@ -1,9 +1,10 @@
 """Local Chinese/English speech with a sci-fi treatment, streamed sentence by sentence
 so playback starts fast and can be cut off mid-sentence."""
+import os
 import re
 import numpy as np
 from scipy.signal import lfilter
-from . import models
+from . import config, models
 
 VOICE = 68          # deep, clear Kokoro male voice; see the listening page for alternatives
 SR_OUT = 24000
@@ -67,6 +68,7 @@ class PiperSpeaker:
         self.cfg = SynthesisConfig(length_scale=length_scale)
         self.sr = self.voice.config.sample_rate
         self.fx = fx
+        self.info = {"engine": "piper", "label": f"Piper {os.path.basename(path).split('.')[0]}（本机离线）", "lang": "英文", "local": True}
 
     def synth(self, text):
         from scipy.signal import resample_poly
@@ -86,17 +88,90 @@ class PiperSpeaker:
             yield resample_poly(x, SR_OUT // g, self.sr // g).astype(np.float32)
 
 
+class SpeechError(RuntimeError):
+    """The voice engine cannot speak; the message is meant for the user (shown in the HUD)."""
+
+
 def make_speaker():
-    return PiperSpeaker() if models.LANG == "en" else Speaker()
+    """The speaker for the configured language, with .info = {engine, label, lang, local, error?} so the HUD can say which
+    engine is talking and in which language. Never raises: a missing engine becomes a BrokenSpeaker that says why."""
+    if models.LANG == "en":
+        try:
+            return PiperSpeaker()
+        except Exception as e:
+            return BrokenSpeaker("英文语音引擎（Piper jarvis-high）无法启动：" + f"{type(e).__name__}: {e}"[:160])
+    mode = config.get("voice_tts") or "auto"          # auto | local (Kokoro model) | system (macOS voice)
+    why = []
+    if mode in ("auto", "local"):
+        if models.TTS_DIR.exists():
+            try:
+                return Speaker()
+            except Exception as e:
+                why.append(f"本机中文语音模型（Kokoro）无法加载：{type(e).__name__}: {e}"[:200])
+        else:
+            why.append("本机中文语音模型（Kokoro）还没有安装")
+    if mode in ("auto", "system"):
+        try:
+            from . import platforms
+            voices = platforms.say_voices()
+        except Exception as e:
+            voices, why = [], why + [f"读取系统声音失败：{type(e).__name__}"]
+        if voices:
+            return SystemSpeaker(pick_voice(voices, config.get("system_voice")))
+        why.append("这台电脑没有可用的系统中文声音")
+    return BrokenSpeaker("没有可用的中文语音引擎：" + "；".join(why) + "。回答只会显示文字。")
+
+
+def pick_voice(voices, wanted=None):
+    """The user's chosen system voice if it exists, else the best Chinese one installed (premium, enhanced, then Tingting)."""
+    if wanted and wanted in voices:
+        return wanted
+    def rank(v):
+        low = v.lower()
+        return (0 if "premium" in low or "高品质" in v else 1 if "enhanced" in low or "增强" in v else 2,
+                0 if "tingting" in low or "ting-ting" in low else 1 if "meijia" in low or "mei-jia" in low else 2)
+    return sorted(voices, key=rank)[0]
 
 
 class Speaker:
+    """Chinese + English with the Kokoro model run by sherpa-onnx, fully on this computer."""
     def __init__(self, voice=VOICE, speed=1.0, fx=1.0, engine=None):
         self.tts = engine or models.tts()
         self.voice, self.speed, self.fx = voice, speed, fx
+        self.info = {"engine": "kokoro", "label": "Kokoro 多语言 v1.1（本机离线）", "lang": "中文", "local": True}
 
     def synth(self, text):
         """Yield float32 chunks at 24 kHz, one per sentence."""
         for s in sentences(text):
             a = self.tts.generate(s, sid=self.voice, speed=self.speed)
             yield scifi(np.asarray(a.samples, np.float32), a.sample_rate, self.fx)
+
+
+class SystemSpeaker:
+    """A Chinese voice that ships with the operating system (macOS `say`): runs locally, no download, no network."""
+    def __init__(self, voice):
+        self.voice = voice
+        self.info = {"engine": "system", "label": f"macOS 系统声音「{voice}」（本机）", "lang": "中文", "local": True}
+
+    def synth(self, text):
+        from scipy.signal import resample_poly
+        from math import gcd
+        from . import platforms
+        for s in sentences(text):
+            x, sr = platforms.say_wav(s, self.voice)
+            if len(x) == 0:
+                continue
+            g = gcd(SR_OUT, sr)
+            y = resample_poly(x, SR_OUT // g, sr // g).astype(np.float32)
+            peak = float(np.abs(y).max())
+            yield (y * (0.9 / peak) if peak > 1e-6 else y).astype(np.float32)
+
+
+class BrokenSpeaker:
+    def __init__(self, reason):
+        self.reason = reason
+        self.info = {"engine": "none", "label": "没有可用的语音引擎", "lang": "—", "local": True, "error": reason}
+
+    def synth(self, text):
+        raise SpeechError(self.reason)
+        yield                                           # pragma: no cover  (makes this a generator)

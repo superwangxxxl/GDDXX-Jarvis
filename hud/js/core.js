@@ -4,6 +4,7 @@ const small = innerWidth < 900;
 const $ = (s) => document.querySelector(s);
 function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 const routeCv = $('#route');
+let WAKE = 'Hey Jarvis';        // the wake phrase of the running voice language (the service sends the real one)
 let tripLive = false;      // true once a real route has been shown (the route panel draws nothing before that)
 // route polyline (0..1 of the canvas): defined here because loop.js reads it before creator.js has loaded
 const routePts = [[0.05, 0.5], [0.16, 0.5], [0.24, 0.38], [0.36, 0.42], [0.44, 0.62], [0.56, 0.58], [0.64, 0.74], [0.75, 0.66], [0.85, 0.7], [0.92, 0.46], [0.95, 0.24]];

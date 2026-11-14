@@ -147,7 +147,7 @@ def _from_archive(url, members, models):
 def models():
     STATE["step"] = 2
     man = json.loads((ROOT / "app" / "models.json").read_text(encoding="utf-8"))
-    groups = {"core", "zh" if (config.get("voice_lang") or os.environ.get("JARVIS_LANG") or "en") == "zh" else "en"}
+    groups = {"core", "zh" if (os.environ.get("JARVIS_LANG") or config.get("voice_lang") or "en") == "zh" else "en"}
     M = paths.MODELS
     M.mkdir(parents=True, exist_ok=True)
     todo = [e for e in man["files"] if e.get("group", "core") in groups]
@@ -206,7 +206,9 @@ def models():
             log(f"下载模型文件夹 {d['dir']}")
             with tempfile.TemporaryDirectory() as td:
                 arc = Path(td) / "a.tar.bz2"
-                _fetch(d["archive"], arc)
+                _fetch(d["archive"], arc, d.get("size", 0))
+                if (d.get("size") and arc.stat().st_size != d["size"]) or (d.get("sha256") and _sha(arc) != d["sha256"]):
+                    raise RuntimeError(f"模型文件夹 {d['dir']} 校验不通过（大小或 sha256 与清单不符），已拒绝安装。请稍后重试。")
                 with tarfile.open(arc) as t:
                     _extract(t, M)
 

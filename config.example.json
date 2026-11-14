@@ -1,6 +1,7 @@
 {
   "name": "sir",
-  "reply_lang": "en",
+  "voice_lang": "en",
+  "voice_tts": "auto",
   "llm": {
     "provider": "deepseek",
     "base_url": "https://api.deepseek.com/v1",

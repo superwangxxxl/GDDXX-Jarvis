@@ -8,7 +8,7 @@ function wxSetOpen(open) {
   wxSet.hidden = !open; wxGear.setAttribute('aria-expanded', String(open));
   if (open) {
     const m = wxMsg, mode = m && m.mode;
-    $('#wxMode').textContent = '当前来源：' + (mode === 'device' ? '设备定位' : mode === 'city' ? '手动选择的城市' : mode === 'named' ? '—' : '设备定位（未授权时请选城市）');
+    $('#wxMode').textContent = '当前来源：' + (mode === 'device' ? '设备定位' : mode === 'city' ? '手动城市（不是设备位置，不会跟随你移动）' : mode === 'named' ? '—' : '设备定位（未授权时请选城市）');
     wxQ.focus();
   }
 }
