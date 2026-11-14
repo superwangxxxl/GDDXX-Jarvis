@@ -24,6 +24,23 @@ jobs:
       - run: python -m compileall -q jarvis app tests
       - name: brain and onboarding (fake model server)
         run: python tests/test_brain.py
+      - name: weather and DingTalk read-only (fake network, fake location, fake dws)
+        run: python tests/test_weather.py
+      - name: DingTalk read-only plugin (fake dws)
+        if: runner.os != 'Windows'
+        run: python tests/test_dingtalk.py
+      - name: voice chain failure handling and the Chinese voice setup (no models, fake engines)
+        run: python tests/test_voice_chain.py
+      - name: model folders are verified file by file (stand-in archive)
+        run: python tests/test_model_dirs.py
+      - name: install.sh / rollback.sh guarantees (stand-in app and patch)
+        if: runner.os != 'Windows'
+        run: python tests/test_patch_install.py
+      - name: an older voice service no longer blocks the port
+        if: runner.os != 'Windows'
+        run: python tests/test_service_port.py
+      - name: bilingual wake aliases (Hey Jarvis / JERVIOUS) keep reply_lang
+        run: python tests/test_wake_bilingual.py
       - name: every module imports
         run: python -c "import jarvis.service, jarvis.gesture, jarvis.onboard, jarvis.tools as t; print(sorted(t.names()))"
 
@@ -44,6 +61,9 @@ jobs:
         env: {JARVIS_APP_DIR: "${{ github.workspace }}"}
       - run: python tests/simulate_en.py
         env: {JARVIS_VOICE_MODELS: "${{ github.workspace }}/models"}
+      - name: Chinese voice models (size and sha256 checked) and the Chinese voice mode end to end
+        run: python app/install.py --no-page --models-only && python tests/test_voice_zh.py
+        env: {JARVIS_APP_DIR: "${{ github.workspace }}", JARVIS_LANG: zh, JARVIS_VOICE_MODELS: "${{ github.workspace }}/models"}
       - run: python tests/test_listen_pause.py
         env: {JARVIS_VOICE_MODELS: "${{ github.workspace }}/models", JARVIS_STAY_ON: "1"}
       - run: python tests/test_holo_library.py
@@ -57,6 +77,7 @@ jobs:
         with: {node-version: "22"}
       - run: npm i playwright@1.48.2 && npx playwright install --with-deps chromium
       - run: (cd hud && python3 -m http.server 8811 &) && sleep 2 && node tests/hud_check.js http://127.0.0.1:8811/index.html
+      - run: (cd hud && python3 -m http.server 8812 &) && sleep 2 && node tests/hud_weather_check.js http://127.0.0.1:8812/index.html
 
   build:
     # installers: built on every PR (to keep the scripts working) and on v* tags (published by the release job)

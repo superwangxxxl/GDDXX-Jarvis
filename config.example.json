@@ -1,16 +1,19 @@
 {
   "name": "sir",
-  "reply_lang": "en",
+  "voice_lang": "en",
+  "voice_tts": "auto",
   "llm": {
     "provider": "deepseek",
     "base_url": "https://api.deepseek.com/v1",
     "api_key": "sk-...",
     "model": "deepseek-chat"
   },
-  "amap": {"key": "高德 Web 服务 key（可选，用于天气和路线）"},
+  "amap": {"key": "高德 Web 服务 key（可选，只用于路线）"},
+  "weather": {"mode": "device"},
+  "dingtalk": {"dws_path": "你自己的 dws 命令绝对路径（可选，钉钉只读听记）", "timeout": 20},
   "mihome": {"server": "cn"},
   "harness": {"path": "DeepSeek Harness 的 dsh 命令路径（可选）"},
-  "plugins": {"mihome": true, "amap": true, "harness": true, "creator": true, "demos": true},
+  "plugins": {"mihome": true, "amap": true, "weather": true, "dingtalk": true, "harness": true, "creator": true, "demos": true},
   "workspace": "~/Desktop/Jarvis 作品",
   "debug_clips": false
 }

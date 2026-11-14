@@ -84,7 +84,7 @@
       $('#llmResult').textContent = `找到 ${m.models.length} 个模型，点模型框选择。`;
     } else if (m.kind === 'saved') {
       S.hasKey = !!m.has_key;
-      $('#llmResult').innerHTML = '<span class="ok">✓ 已保存。说 “Hey Jarvis” 试试吧。</span>';
+      $('#llmResult').innerHTML = `<span class="ok">✓ 已保存。说 “${WAKE}” 试试吧。</span>`;
       setTimeout(close, 1200);
     } else if (m.kind === 'status') status(m);
     else if (m.kind === 'error') $('#llmResult').innerHTML = `<span class="bad">✕ ${esc(m.error)}</span>`;

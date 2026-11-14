@@ -6,7 +6,7 @@
 Events go out on ws://127.0.0.1:8765 so the HUD can show listening/thinking/speaking
 and subtitles. Typed text can be sent in on the same socket ({"type":"text","text":...}).
 """
-import asyncio, json, os, queue, threading, time, wave
+import asyncio, json, os, queue, subprocess, sys, threading, time, traceback, wave
 from pathlib import Path
 import numpy as np
 try:
@@ -18,7 +18,7 @@ from scipy.signal import resample_poly
 from . import models
 from .aec import EchoCanceller
 from .engine import VoiceEngine
-from .tts import make_speaker, SR_OUT
+from .tts import make_speaker, SpeechError, SR_OUT
 from .brain import answer_pair
 from . import config, paths, sysmon, schedule, brain, memory, tools
 
@@ -98,6 +98,93 @@ class Player:
                 self.q.get_nowait()
 
 
+PIDFILE = paths.DATA / "voice.pid"
+
+
+def port_in_use(host, port):
+    import socket
+    s = socket.socket()
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)          # a port that is only in TIME_WAIT is free
+        s.bind((host, port))
+        return False
+    except OSError:
+        return True
+    finally:
+        s.close()
+
+
+def _listener_pids(port):
+    try:
+        out = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             text=True, timeout=10).stdout
+        return {int(x) for x in out.split()}
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return set()
+
+
+def is_jarvis_service(pid):
+    """True only for a `python -m jarvis` of this same user: the one process this service may replace."""
+    try:
+        import psutil
+        p = psutil.Process(pid)
+        cmd = p.cmdline()
+        mine = os.name != "posix" or p.uids().real == os.getuid()
+        return mine and "-m" in cmd and cmd[cmd.index("-m") + 1:cmd.index("-m") + 2] == ["jarvis"]
+    except Exception:
+        return False
+
+
+def reclaim_port(host, port, wait=5.0):
+    """The window closing does not guarantee the voice service of the last run is gone (a crash, a force quit, a restart in
+    the middle of a run). If the port is still held by an older Jarvis voice service of this user, stop it so this one can
+    start; anything else holding the port is left alone. Returns (free, who) with who describing a foreign holder."""
+    if not port_in_use(host, port):
+        return True, ""
+    pids = _listener_pids(port)
+    try:
+        pids.add(int(PIDFILE.read_text().split()[0]))
+    except (OSError, ValueError, IndexError):
+        pass
+    pids.discard(os.getpid())
+    old = [p for p in pids if is_jarvis_service(p)]
+    foreign = [p for p in pids if p not in old and p in _listener_pids(port)]
+    for pid in old:
+        log(f"port {port} is held by an older Jarvis voice service (pid {pid}): stopping it")
+        try:
+            import psutil
+            proc = psutil.Process(pid)
+            proc.terminate()
+            try:
+                proc.wait(wait)
+            except psutil.TimeoutExpired:
+                proc.kill()
+                proc.wait(2)
+        except Exception as e:
+            log(f"could not stop pid {pid}: {type(e).__name__}")
+    for _ in range(20):
+        if not port_in_use(host, port):
+            return True, ""
+        time.sleep(0.25)
+    return False, ", ".join(str(p) for p in foreign) or "unknown"
+
+
+def write_pidfile():
+    try:
+        PIDFILE.parent.mkdir(parents=True, exist_ok=True)
+        PIDFILE.write_text(f"{os.getpid()} {int(time.time())}\n")
+    except OSError as e:
+        log(f"pid file: {e}")
+
+
+def remove_pidfile():
+    try:
+        if PIDFILE.read_text().split()[0] == str(os.getpid()):
+            PIDFILE.unlink()
+    except (OSError, IndexError):
+        pass
+
+
 class Service:
     def __init__(self):
         self.aec = EchoCanceller()
@@ -106,6 +193,9 @@ class Service:
         self.speaker = make_speaker()
         self.clients = set()
         self.mic_msg = None                    # set while no audio device can be opened
+        self.last_error = None                 # the latest voice_error, replayed to a window that connects later
+        self.engine_err_at = 0.0
+        self.fallback = getattr(models, "FALLBACK", None)
         self.muted = False                     # the HUD's 暂停聆听 switch: the microphone is ignored until it is turned back on
         self.mute_reset = False                # the audio thread drops any half-heard sentence on the next block
         from . import gesture                  # hand tracking for holograms
@@ -167,7 +257,8 @@ class Service:
 
     def on_event(self, name, data):
         log(f"event {name} {data if name not in ('ack',) else ''}")
-        self.broadcast({"type": name, **data})
+        stt = getattr(getattr(self.engine, "asr", None), "last", "") if name in ("heard", "command") else ""
+        self.broadcast({"type": name, **data, **({"stt": stt} if stt else {})})
         if name in ("wake", "heard", "rejected"):
             self.mark_attempt()
         if name == "wake":
@@ -193,15 +284,20 @@ class Service:
         except Exception as e:
             log(f"schedule: {e}")
 
-    # -- weather and routes (AMap plugin) -------------------------------------
+    # -- weather (Open-Meteo, device location) and routes (AMap plugin) ---------------
     def push_world(self):
+        weather = tools.plugin("weather")
+        if weather:
+            try:
+                weather.push()
+            except Exception as e:
+                log(f"weather: {type(e).__name__}: {e}")
+        else:
+            self.broadcast({"type": "weather", "status": "unavailable", "reason": "disabled", "message": "天气功能已在设置里关闭。",
+                            "source": "Open-Meteo", "can_choose_city": False})
         amap = tools.plugin("amap")
         if not amap or not amap.key():
             return
-        try:
-            self.broadcast({"type": "weather", **amap.weather()})
-        except Exception as e:
-            log(f"weather: {e}")
         try:                                    # weekday mornings: the commute to work
             ps, now = amap.places(), time.localtime()
             if "home" in ps and "work" in ps and now.tm_wday < 5 and 6 <= now.tm_hour < 10 and not self.trip_shown:
@@ -209,6 +305,11 @@ class Service:
                 self.push_trip()
         except Exception as e:
             log(f"commute: {e}")
+
+    def weather_msg(self, msg):
+        weather = tools.plugin("weather")
+        if weather:
+            weather.msg(msg)
 
     def push_trip(self):
         amap = tools.plugin("amap")
@@ -290,10 +391,15 @@ class Service:
         self.broadcast({"type": "state", "state": "thinking"}); self.broadcast({"type": "you", "text": text})
         memory.log_turn("you", text, via="voice" if spoken else "typed")
         def work():
-            reply, zh = answer_pair(text, spoken=spoken)
-            log(f"reply: {reply[:120]}" + (f" | {zh[:60]}" if zh else ""))
-            self.push_schedule()
-            self.push_trip()
+            try:
+                reply, zh = answer_pair(text, spoken=spoken)
+                log(f"reply: {reply[:120]}" + (f" | {zh[:60]}" if zh else ""))
+                self.push_schedule()
+                self.push_trip()
+            except Exception as e:
+                log(f"answer failed: {type(e).__name__}: {e}")
+                self.voice_error("brain", f"回答时出错：{type(e).__name__}: {e}"[:200])
+                reply, zh = ("出错了，我没能回答。", "") if models.LANG == "zh" else ("Sorry, something went wrong on my side.", "出错了，我没能回答。")
             if gen == self.gen:
                 self.say(reply, gen=gen, zh=zh)
         threading.Thread(target=work, daemon=True).start()
@@ -449,24 +555,157 @@ class Service:
         log(f"narrates: {en}")
         self.say(en, zh=zh)
 
-    def say(self, text, gen=None, interruptible=True, zh=""):
+    def say(self, text, gen=None, interruptible=True, zh="", speaker=None, remember=True):
         gen = self.gen if gen is None else gen
+        speaker = speaker or self.speaker
+        if models.LANG == "zh" and zh:                 # a Chinese voice reads the Chinese line, not the English one
+            text, zh = zh, ""
         def work():
             if gen != self.gen: return
             if interruptible: self.engine.set_speaking(True)
             self.broadcast({"type": "state", "state": "speaking"}); self.broadcast({"type": "jarvis", "text": text, "zh": zh})
-            if text != ack_line():
-                memory.log_turn("jarvis", text, zh)
-            for chunk in self.speaker.synth(text):
-                if gen != self.gen: return
-                self.player.push(chunk)
-            while self.player.busy() and gen == self.gen:
-                time.sleep(0.05)
+            try:
+                if remember and text != ack_line():
+                    memory.log_turn("jarvis", text, zh)
+                for chunk in speaker.synth(text):
+                    if gen != self.gen: return
+                    self.player.push(chunk)
+                while self.player.busy() and gen == self.gen:
+                    time.sleep(0.05)
+            except Exception as e:
+                # the answer is on screen; say why it could not be spoken, and let Jarvis listen again
+                reason = str(e) if isinstance(e, SpeechError) else f"语音合成出错：{type(e).__name__}: {e}"[:200]
+                log(f"speech failed: {type(e).__name__}: {e}")
+                self.voice_error("tts", reason + "（回答已显示在屏幕上）")
             if gen == self.gen:
                 # finished on its own: keep listening for the reply, no wake word needed
                 self.engine.set_speaking(False, said=text)
                 self.broadcast({"type": "state", "state": "listening" if self.engine.state == "awake" and not self.muted else "idle"})
         threading.Thread(target=work, daemon=True).start()
+
+    # -- what the voice chain is doing, and why it is silent ------------------------------
+    def voice_error(self, stage, text):
+        """A visible error for one stage of mic -> wake -> recognition -> brain -> speech (the HUD shows it under the meter)."""
+        self.last_error = {"type": "voice_error", "stage": stage, "text": text, "at": time.time()}
+        self.broadcast(self.last_error)
+
+    def voice_info(self):
+        lang = models.LANG
+        info = dict(getattr(self.speaker, "info", {}))
+        base, _key, model = config.llm()
+        prov = config.section("llm").get("provider") or ""
+        ok, miss = models.ready("zh" if lang == "en" else "en")
+        out = {"type": "voice", "lang": lang, "reply_lang": config.reply_lang(), "tts": info,
+               "stt": ("Parakeet（英文）+ SenseVoice（中文兜底），本机离线" if lang == "en" else "SenseVoice（中/英/日/韩/粤），本机离线"),
+               "stt_last": getattr(getattr(self.engine, "asr", None), "last", ""),
+               "wake": ("openWakeWord “Hey Jarvis”，本机离线" if lang == "en" else
+                        "关键词识别（wenetspeech KWS）+ 文字确认「嗨，贾维斯」；英文 “Hey Jarvis”/JERVIOUS 走 SenseVoice 文字确认，本机离线"),
+               "wake_word": "Hey Jarvis" if lang == "en" else "嗨，贾维斯 / Hey Jarvis",
+               "brain": (f"{prov or '自定义'} · {model}（只发送识别出的文字）" if base else "还没有接入大模型"),
+               "other_ready": ok, "other_missing": miss, "tts_mode": config.get("voice_tts") or "auto",
+               "system_voices": [], "muted": self.muted}
+        try:
+            from . import platforms
+            out["system_voices"] = platforms.say_voices()[:6]
+        except Exception:
+            pass
+        if info.get("engine") == "kokoro":
+            from . import tts as _tts
+            out["style"] = {"speaker": info["speaker"], "fx": info["fx"], "amount": info["amount"], "speakers": _tts.male_speakers(),
+                            "default": {"speaker": _tts.VOICE, "fx": _tts.DEFAULT_FX[0], "amount": _tts.DEFAULT_FX[1]}}
+        if self.fallback:
+            out["fallback"] = self.fallback
+        return out
+
+    def voice_msg(self, msg):
+        """The 「语言与语音」 panel: voice_info, voice_test (say a line), voice_set (language or Chinese voice engine)."""
+        t = msg.get("type")
+        try:
+            if t == "voice_info":
+                self.broadcast(self.voice_info())
+            elif t == "voice_test":
+                self.gen += 1; self.player.stop()
+                n = N()
+                self.say(f"This is {getattr(self.speaker, 'info', {}).get('label', 'the voice')}. Can you hear me, {n}?" if models.LANG == "en" else
+                         f"你好，我是贾维斯。现在用的是{getattr(self.speaker, 'info', {}).get('label', '语音引擎')}，你能听到我吗？",
+                         zh="" if models.LANG == "zh" else "这是语音测试，你能听到吗？")
+            elif t in ("voice_preview", "voice_style", "voice_style_reset"):
+                self.voice_style(t, msg)
+            elif t == "voice_set" and msg.get("tts") in ("auto", "local", "system"):
+                config.update(voice_tts=msg["tts"])
+                self.speaker = make_speaker()
+                self.broadcast(self.voice_info())
+                if getattr(self.speaker, "info", {}).get("error"):
+                    self.voice_error("tts", self.speaker.info["error"])
+            elif t == "voice_set" and msg.get("lang") in ("en", "zh"):
+                self.switch_voice(msg["lang"])
+        except Exception as e:
+            log(f"voice_msg {t}: {type(e).__name__}: {e}")
+            self.broadcast({"type": "voice_switch", "stage": "error", "text": f"{type(e).__name__}: {e}"[:300]})
+
+    PREVIEW_LINE = "你好，我是贾维斯。现在是下午三点，天气晴朗。"
+
+    def voice_style(self, kind, msg):
+        """The Chinese male voice and the mechanical effect: preview (not saved), use (saved), back to the defaults. Only real
+        speakers of the model and the known effects are accepted; speed is not a setting."""
+        from . import tts as _tts
+        sp = self.speaker
+        if not isinstance(sp, _tts.Speaker):
+            self.voice_error("tts", "只有本机 Kokoro 中文模型能选声音和效果（当前播报引擎不是它）。")
+            return
+        if kind == "voice_style_reset":
+            config.update(voice_speaker=None, voice_fx=None)
+            sp.configure(*_tts.configured_style())
+            self.broadcast(self.voice_info())
+            self.broadcast({"type": "voice_style", "stage": "reset", "text": "已恢复默认声音（zm_029，轻回声）。"})
+            return
+        style = _tts.clean_style(msg.get("speaker"), msg.get("fx"), (msg.get("amount") or 0) / 100.0 if msg.get("amount") is not None else None)
+        if kind == "voice_style":
+            config.update(voice_speaker=style[0], voice_fx={"mode": style[1], "amount": style[2]})
+            sp.configure(*style)
+            self.broadcast(self.voice_info())
+            self.broadcast({"type": "voice_style", "stage": "saved", "text": f"已使用 {_tts.MALE_NAMES[style[0] - 58]}，效果：{sp.info['label'].split('· ')[-1]}。"})
+        self.gen += 1
+        self.player.stop()
+        trial = _tts.Speaker(engine=sp.tts, voice=style[0], fx=(style[1], style[2]))
+        self.say(self.PREVIEW_LINE, speaker=trial, remember=False)
+
+    def switch_voice(self, lang):
+        """Change the language of wake word, recognition, voice and answers. Missing models are downloaded by app/install.py
+        (size and sha256 checked), then the voice service restarts itself; the window reconnects on its own."""
+        def tell(stage, text, **k):
+            self.broadcast({"type": "voice_switch", "stage": stage, "lang": lang, "text": text, **k})
+        if getattr(self, "_switching", False):
+            return
+        self._switching = True
+        try:
+            ok, miss = models.ready(lang)
+            # always run the installer: it verifies model folders that are already on disk file by file and replaces any that
+            # are incomplete or different, so a folder is never trusted just because it exists
+            tell("download", ("需要先下载：" + "、".join(miss) + "。" if not ok else "") + "正在逐个核对模型文件的校验码…")
+            root = Path(__file__).resolve().parents[1]
+            env = {**os.environ, "JARVIS_LANG": lang, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+            p = subprocess.Popen([sys.executable, str(root / "app" / "install.py"), "--no-page", "--models-only"], cwd=str(root), env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            tail = []
+            for line in p.stdout:
+                line = line.strip()
+                if line:
+                    tail = (tail + [line])[-6:]
+                    tell("download", line[:200])
+            if p.wait() != 0 or not models.ready(lang)[0]:
+                tell("error", "模型没有核对通过或没有下载完整，没有切换。原因：" + (tail[-1] if tail else "未知")[:160])
+                return
+            config.update(voice_lang=lang, reply_lang=lang)
+            tell("restart", "已切换，语音服务正在重启…")
+            log(f"voice language -> {lang}, restarting")
+            time.sleep(1.2)
+            os.execv(sys.executable, [sys.executable, "-m", "jarvis"])
+        except Exception as e:
+            log(f"switch_voice: {type(e).__name__}: {e}")
+            tell("error", f"{type(e).__name__}: {e}"[:300])
+        finally:
+            self._switching = False
 
     # -- audio loop ----------------------------------------------------
     def duplex_cb(self, indata, outdata, frames, t, status):
@@ -497,7 +736,7 @@ class Service:
                 if not warned:
                     log(f"audio device unavailable: {type(e).__name__}: {e}")
                     self.mic_msg = {"type": "mic", "ok": False,
-                                    "text": "没有找到可用的麦克风或扬声器。接上设备后会自动重试；也可以先用文字输入。"}
+                                    "text": f"打不开麦克风或扬声器（{type(e).__name__}: {e}）。检查系统设置里的麦克风权限和输入设备；接上设备后会自动重试，也可以先用文字输入。"[:300]}
                     self.broadcast(self.mic_msg)
                     warned = True
                 time.sleep(5)
@@ -506,6 +745,27 @@ class Service:
                         sd._terminate(); sd._initialize()    # re-scan devices (a newly plugged-in microphone)
                 except Exception:
                     pass
+
+    def unstick(self):
+        """Thinking or speaking with nothing happening (a reply thread died, the speaker stalled): say so and listen again."""
+        e = self.engine
+        limit = 200 if e.state == "thinking" else 30
+        if e.state in ("thinking", "speaking") and not self.player.busy() and e.now() - e.busy_since > limit:
+            log(f"voice state {e.state} stuck for {limit} s, resetting")
+            e._reset()
+            self.broadcast({"type": "state", "state": "idle"})
+            self.voice_error("stt", "语音状态卡住了，已自动恢复。请再说一次；如果反复出现，打开「语言与语音」看看是哪一环出了问题。")
+
+    def feed_engine(self, x):
+        try:
+            self.engine.feed(x)
+        except Exception as e:                    # a recognizer/wake failure must not look like "no microphone"
+            now = time.time()
+            if now - self.engine_err_at > 30:
+                self.engine_err_at = now
+                log("engine failed:\n" + traceback.format_exc()[-900:])
+                self.voice_error("stt", f"语音识别/唤醒出错：{type(e).__name__}: {e}"[:200])
+            self.engine._reset()
 
     def audio_run(self):
         last = time.time()
@@ -526,7 +786,7 @@ class Service:
                         self.level_at = time.time()
                     continue
                 self.recent = np.concatenate([self.recent[len(x):], x])
-                self.engine.feed(x)
+                self.feed_engine(x)
                 w = getattr(self.engine.wake, "score", 0.0)
                 self.stats["wake"] = max(self.stats["wake"], w)
                 if w >= 0.1:
@@ -579,6 +839,11 @@ class Service:
     async def ws_main(self, host="127.0.0.1", port=int(os.environ.get("JARVIS_VOICE_PORT", 8765))):
         import websockets
         self.loop = asyncio.get_running_loop()
+        free, who = reclaim_port(host, port)
+        if not free:
+            msg = f"端口 {port} 被别的程序占用（进程 {who}），语音服务没能启动。关掉占用它的程序后重新打开 Jarvis。"
+            log(msg)
+            raise RuntimeError(msg)
         async def handler(ws):
             self.clients.add(ws)
             self.seen = time.time()
@@ -591,6 +856,11 @@ class Service:
                 await ws.send(json.dumps(agents.snapshot(), ensure_ascii=False))
                 if self.mic_msg:
                     await ws.send(json.dumps(self.mic_msg, ensure_ascii=False))
+                await ws.send(json.dumps(self.voice_info(), ensure_ascii=False))
+                if self.last_error and time.time() - self.last_error["at"] < 600:
+                    await ws.send(json.dumps(self.last_error, ensure_ascii=False))
+                elif getattr(self.speaker, "info", {}).get("error"):
+                    await ws.send(json.dumps({"type": "voice_error", "stage": "tts", "text": self.speaker.info["error"]}, ensure_ascii=False))
                 await ws.send(json.dumps({"type": "listen", "on": not self.muted}))
             except Exception:
                 pass
@@ -610,6 +880,10 @@ class Service:
                     elif msg.get("type") == "camera":        # the HUD wants the camera (a demo is on screen)
                         from . import gesture
                         gesture.TRACKER.set(bool(msg.get("on")))
+                    elif msg.get("type", "").startswith("voice_"):    # the 语言与语音 panel
+                        threading.Thread(target=self.voice_msg, args=(msg,), daemon=True).start()
+                    elif msg.get("type", "").startswith("weather_"):  # the weather panel: refresh, use the device location, pick a city
+                        threading.Thread(target=self.weather_msg, args=(msg,), daemon=True).start()
                     elif msg.get("type", "").startswith("earth_"):   # the 地球此刻 wall: fetch feeds, track a flight, opened/closed
                         threading.Thread(target=self.earth_msg, args=(msg,), daemon=True).start()
                     elif msg.get("type", "").startswith("em_"):      # 流浪地球计划: optional download, status, opened/closed
@@ -637,6 +911,7 @@ class Service:
                     gesture.TRACKER.set(False)
         tick = 0
         async with websockets.serve(handler, host, port):
+            write_pidfile()
             while True:
                 await asyncio.sleep(2)
                 if self.clients:
@@ -650,6 +925,7 @@ class Service:
                             self.broadcast(snap)
                     except Exception as e:
                         log(f"agents: {e}")
+                    self.unstick()
                     if tick % 15 == 0:                  # every ~30 s
                         self.remind()
                     if tick % 30 == 5:                  # every ~60 s: nightly review, night learning, morning report
@@ -665,13 +941,32 @@ class Service:
                 elif os.environ.get("JARVIS_STAY_ON") != "1" and time.time() - self.seen > 20:
                     # the Jarvis window is gone (closed or crashed): stop listening until it opens again
                     log("no Jarvis window connected, stopping")
+                    remove_pidfile()
                     os._exit(0)
 
 
+def pick_language():
+    """The configured language, unless its models are missing and the other language's are there: then start in that one and
+    say so in the HUD instead of failing silently."""
+    ok, miss = models.ready(models.LANG)
+    if ok:
+        return
+    other = "en" if models.LANG == "zh" else "zh"
+    if models.ready(other)[0]:
+        print(f"voice: the {models.LANG} speech models are incomplete ({', '.join(miss)}); starting in {other}", flush=True)
+        models.FALLBACK = {"wanted": models.LANG, "using": other, "missing": miss}
+        models.LANG = other
+        config.RUNTIME["voice_lang"] = other
+
+
 def main():
+    pick_language()
     s = Service()
     threading.Thread(target=s.audio_loop, daemon=True).start()
-    print("Jarvis voice: standing by. Say \"Hey Jarvis\"." if models.LANG == "en" else "Jarvis voice: standing by. Say 「嗨，贾维斯」.", flush=True)
+    if models.LANG == "en":
+        print("Jarvis voice: standing by. Say \"Hey Jarvis\".", flush=True)
+    else:
+        print("Jarvis 语音：待命中。说「嗨，贾维斯」或 “Hey Jarvis”（回答仍是中文）。", flush=True)
     asyncio.run(s.ws_main())
 
 

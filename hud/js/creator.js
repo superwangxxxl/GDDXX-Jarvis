@@ -67,7 +67,6 @@ function tick() {
   const d = new Date(); const p = n => String(n).padStart(2, '0');
   $('#clock').textContent = `${p(d.getHours())}:${p(d.getMinutes())}`;
   $('#date').textContent = `${d.getMonth() + 1}月${d.getDate()}日 ${WD[d.getDay()]}`;
-  if (!tripLive) { const e = new Date(d.getTime() + 32 * 60000); $('#eta').textContent = `${p(e.getHours())}:${p(e.getMinutes())}`; }
   if (!wxLive) $('#d3').firstChild.textContent = WD[(d.getDay() + 2) % 7];
   if (!sysLive) {          // demo numbers only until the real monitor reports in
     $('#mem').textContent = (55 + Math.round(Math.random() * 5)) + '%';
@@ -111,6 +110,7 @@ function drawSmall(t) {
     if (i === 0) { for (let j = 0; j < 7; j++) { c.fillStyle = `rgba(${SKC.soft},${0.35 + 0.35 * Math.abs(Math.sin(t * 0.7 * act + j))})`; c.fillRect(0, h * 0.25 + j * h * 0.11, w * 0.85, DPR); } return; }
     const N = 14; for (let j = 0; j < N; j++) { const v = 0.12 + 0.6 * Math.pow(Math.abs(Math.sin(t * (0.5 + i * 0.15) * act + j * 1.9 + i * 3)), 2) + (j === N - 2 ? 0.3 : 0); c.fillStyle = j === N - 2 ? `rgb(${SKC.ink})` : `rgba(${SKC.soft},.5)`; c.fillRect(j * w / N, h - Math.min(1, v) * h, DPR, Math.min(1, v) * h); } });
   { const c = fit(routeCv), w = c.canvas.width, h = c.canvas.height; c.clearRect(0, 0, w, h);
+    if (!tripLive) return;                     /* no route yet: draw nothing, not a sample route */
     c.lineWidth = DPR; ROADS.forEach(r => { c.strokeStyle = `rgba(${SKC.line},${r.o})`; c.beginPath(); r.p.forEach(([x, y], i) => i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h)); c.stroke(); });
     c.beginPath(); routePts.forEach(([x, y], i) => i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h)); { const gr = c.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, `rgb(${SKC.pri})`); gr.addColorStop(0.45, `rgb(${SKC.accp})`); gr.addColorStop(1, `rgb(${SKC.acc})`); c.strokeStyle = gr; } c.lineWidth = 1.6 * DPR; c.shadowColor = '#9fdcff'; c.shadowBlur = 6 * DPR; c.stroke(); c.shadowBlur = 0;
     routePts.slice(2, -1).forEach(([x, y], k) => { if (k % 2) return; c.fillStyle = `rgb(${SKC.accp})`; c.beginPath(); c.arc(x * w, y * h, 2.2 * DPR, 0, 7); c.fill(); });

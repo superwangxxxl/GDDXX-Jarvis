@@ -6,6 +6,20 @@ import time
 
 NAME = "computer"
 
+
+def locate(**kw):
+    """No device location on this platform yet: the caller asks the user for a city instead of guessing from the network."""
+    return {"ok": False, "reason": "unsupported", "message": "这个系统暂时不能读取设备位置，请选择一个城市。"}
+
+def say_voices(lang="zh"):
+    """No system speech voice is used on this platform yet."""
+    return []
+
+
+def say_wav(text, voice):
+    raise NotImplementedError("system voices are only wired up on macOS")
+
+
 # MediaPipe's 21 hand landmarks, in the joint names gesture.py uses
 MP_JOINTS = {0: "wrist", 2: "thumb_mp", 3: "thumb_ip", 4: "thumb_tip", 5: "index_mcp", 6: "index_pip", 8: "index_tip",
              9: "middle_mcp", 10: "middle_pip", 12: "middle_tip", 13: "ring_mcp", 14: "ring_pip", 16: "ring_tip",

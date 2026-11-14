@@ -12,6 +12,7 @@ import json, os, threading, time
 from pathlib import Path
 import numpy as np
 
+from . import config
 from .paths import DATA, MODELS
 _NAME = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 MODEL = Path(os.environ.get("JARVIS_SPEAKER_MODEL", MODELS / "speaker" / _NAME))
@@ -28,6 +29,18 @@ LINES = [                  # what the user reads at enrolment: both languages, v
     "我刚才说的那件事，你帮我记一下，明天提醒我。",
     "Thanks Jarvis, that's all for now.",
 ]
+
+
+LINES_ZH = [                # the same enrolment in Chinese only, for the Chinese voice mode
+    "嗨，贾维斯，帮我看看今天有什么安排。",
+    "贾维斯，明天早上的天气怎么样？",
+    "把客厅的灯打开，再把空调调到二十六度。",
+    "贾维斯，把那台发动机拆开，让我看看它是怎么工作的。",
+    "我刚才说的那件事，你帮我记一下，明天提醒我。",
+    "谢谢你，贾维斯，今天就先到这里。",
+]
+if config.voice_lang() == "zh":
+    LINES = LINES_ZH
 
 
 def log(msg):

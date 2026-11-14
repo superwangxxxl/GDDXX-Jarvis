@@ -23,7 +23,7 @@
     <div class="motto"><span>随时待命，只为你一人</span><i></i></div>
     <span class="grow"></span>
     <div class="stats">
-      <span>LOCAL<b class="on">● ON</b></span>
+      <span>本机<b class="on">● 运行</b></span>
       <span>CPU<b id="cpu">--</b></span>
       <span>MEM<b id="mem">57%</b></span>
       <span>NET<b>⇅ <span id="net">6.1MB/s</span></b></span>
@@ -35,7 +35,7 @@
       <button class="icon-btn" type="button" aria-label="开始说话" id="btnMic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
       <button class="icon-btn" type="button" aria-label="隐私：数据仅存本地" id="btnShield"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"></path><path d="M12 8.5l3 1.75v3.5L12 15.5l-3-1.75v-3.5z"></path></svg></button>
       <div class="menu-wrap"><button class="icon-btn" type="button" aria-label="菜单" aria-expanded="false" id="btnMenu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h16M4 12h11M4 17h16"></path></svg></button>
-        <div class="menu-pop" id="menuPop" hidden><button type="button" id="btnVoice" aria-pressed="true">语音播报<b>开</b></button></div></div>
+        <div class="menu-pop" id="menuPop" hidden><button type="button" id="btnVoice" aria-pressed="true">语音播报<b>开</b></button><button type="button" id="btnLang">语言与语音<b>设置</b></button></div></div>
     </div>
   </header>
 
@@ -65,22 +65,29 @@
       </section>
     </aside>
 
-    <div class="core-hit" aria-hidden="true"><span class="xh tl"></span><span class="xh tr"></span><span class="xh bl"></span><span class="xh br"></span><div class="coords">N 31.2304°<br>E 121.4737°</div></div>
+    <div class="core-hit" aria-hidden="true"><span class="xh tl"></span><span class="xh tr"></span><span class="xh bl"></span><span class="xh br"></span><div class="coords" id="coords"></div></div>
 
     <aside class="col right">
       <section class="panel" id="pWeather" aria-label="天气与出行">
-        <h2>天气与出行 <span class="pip"></span></h2>
+        <h2>天气与出行 <button type="button" class="wx-gear" id="wxGear" aria-label="天气位置设置" aria-expanded="false" title="天气位置设置：设备定位或选择城市"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"></path></svg></button><span class="pip"></span></h2>
         <div class="wx">
-          <div class="wx-now"><div class="wx-big"><b>18<span class="deg">°C</span></b><svg viewBox="0 0 24 24" fill="none" stroke-width="1.3" aria-hidden="true"><circle cx="15.5" cy="8" r="3.2" stroke="#FFC27A"></circle><path d="M15.5 2.5v1.2M20.5 8h1.2M19 4.5l.9-.9" stroke="#FFC27A"></path><path d="M6 19.5h10a3.8 3.8 0 0 0 0-7.6 5.2 5.2 0 0 0-10 1.6A3 3 0 0 0 6 19.5z" stroke="currentColor" fill="rgba(220,239,247,.12)"></path></svg></div><span>多云</span><span class="meta"><span>上海</span><span>空气优</span><span>AQI 36</span></span></div>
+          <div class="wx-now"><div class="wx-big"><b>--<span class="deg"></span></b><svg viewBox="0 0 24 24" fill="none" stroke-width="1.3" aria-hidden="true"><path d="M6 19.5h10a3.8 3.8 0 0 0 0-7.6 5.2 5.2 0 0 0-10 1.6A3 3 0 0 0 6 19.5z" stroke="currentColor" stroke-dasharray="2 2.4" opacity=".5"></path></svg></div><span>天气不可用</span><span class="meta"><span>等待语音服务</span></span></div>
           <div class="wx-days">
-            <div>今天<svg viewBox="0 0 24 24" fill="rgba(220,239,247,.14)" stroke="currentColor" stroke-width="1.4"><path d="M7 18h10a4 4 0 0 0 0-8 5.5 5.5 0 0 0-10.6 1.5A3.3 3.3 0 0 0 7 18z"></path></svg><b>14°/22°</b></div>
-            <div>明天<svg viewBox="0 0 24 24" fill="none" stroke-width="1.4"><circle cx="15" cy="8" r="3" stroke="#FFC27A" fill="rgba(255,194,122,.25)"></circle><path d="M6 19h9a3.5 3.5 0 0 0 0-7 5 5 0 0 0-9.5 1.4A2.9 2.9 0 0 0 6 19z" stroke="currentColor" fill="rgba(220,239,247,.14)"></path></svg><b>16°/24°</b></div>
-            <div id="d3">周四<svg viewBox="0 0 24 24" fill="none" stroke="#FFC27A" stroke-width="1.4"><circle cx="12" cy="12" r="4" fill="rgba(255,194,122,.25)"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"></path></svg><b>18°/26°</b></div>
+            <div>今天<span class="wx-ph">--</span><b>--</b></div>
+            <div>明天<span class="wx-ph">--</span><b>--</b></div>
+            <div id="d3">后天<span class="wx-ph">--</span><b>--</b></div>
           </div>
+        </div>
+        <div class="wx-src" id="wxSrc" aria-live="polite">没有连上语音服务，没有天气数据</div>
+        <div class="wx-set" id="wxSet" hidden>
+          <div class="wx-set-row"><span id="wxMode">来源：—</span><button type="button" id="wxDevice">使用设备定位</button></div>
+          <form class="wx-set-row" id="wxForm" autocomplete="off"><input id="wxQ" type="text" maxlength="60" placeholder="搜索城市（中文或英文）" aria-label="搜索城市"><button type="submit">搜索</button></form>
+          <ul class="wx-cities" id="wxCities"></ul>
+          <div class="wx-note" id="wxNote">天气来自 Open-Meteo（公开数据，无需账号）。设备定位只在查询天气时使用，不保存。</div>
         </div>
         <div class="trip">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 6.5h11.6l2.4 5.2c.9.4 1.3 1 1.3 1.9V18h-2.2v1.8h-2.6V18H7.3v1.8H4.7V18H2.5v-4.4c0-.9.4-1.5 1.3-1.9z" fill="#DCEFF7"></path><path d="M7.4 8.3h9.2l1.6 3.4H5.8z" fill="#0a1720"></path><circle cx="6.6" cy="14.7" r="1.3" fill="#0a1720"></circle><circle cx="17.4" cy="14.7" r="1.3" fill="#0a1720"></circle></svg>
-          <div><b>去 张江科学城</b><span>32 分钟<em></em>24 km</span></div>
+          <div><b>暂无路线</b><span>让我规划路线：“去某某怎么走”</span></div>
           <div class="eta"><span>预计抵达</span><b id="eta">--:--</b></div>
         </div>
         <canvas id="route" aria-label="通勤路线示意"></canvas>
@@ -104,7 +111,7 @@
       <form class="bar-in" id="form" autocomplete="off">
         <label for="cmd" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">对贾维斯说</label>
         <input id="cmd" type="text" placeholder="说点什么，或按住空格说话">
-        <span class="kbd">HOLD SPACE</span>
+        <span class="kbd">按住空格说话</span>
         <button class="mic" type="button" id="mic" aria-label="开始说话"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
       </form>
       </div>

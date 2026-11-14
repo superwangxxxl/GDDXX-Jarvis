@@ -235,8 +235,9 @@ _home = {}
 
 
 def home():
-    """{lat, lon, name, src}. From the home address saved for AMap routes, else ~/.jarvis/config.json {"earth": {"home": ...}},
-    else the AMap IP city; failing all of that Beijing, marked as a default so the HUD can say so."""
+    """{lat, lon, name, src}. From ~/.jarvis/config.json {"earth": {"home": ...}}, else the home address saved for AMap routes,
+    else the weather position (device location the user allowed, or the city they chose); failing all of that Beijing,
+    marked as a default so the HUD can say so. The IP address is never used as a position."""
     if _home and time.time() - _home.get("_at", 0) < 3600:
         return _home
     out = None
@@ -250,10 +251,19 @@ def home():
         try:
             from . import amap
             h = amap.here()
-            lon, lat = map(float, h["location"].split(","))
-            out = {"lat": lat, "lon": lon, "name": h.get("city") or "家", "src": "amap-" + h.get("from", "")}
+            if h.get("location"):
+                lon, lat = map(float, h["location"].split(","))
+                out = {"lat": lat, "lon": lon, "name": h.get("city") or "家", "src": "amap-" + h.get("from", "")}
         except Exception as e:
             log(f"home from AMap failed: {type(e).__name__}: {str(e)[:80]}")
+    if not out:
+        try:
+            from . import weather
+            p = weather.position()
+            if p:
+                out = {"lat": p["lat"], "lon": p["lon"], "name": p["name"], "src": "weather-position"}
+        except Exception as e:
+            log(f"home from the weather position failed: {type(e).__name__}")
     if not out:
         out = {"lat": 39.9042, "lon": 116.4074, "name": "北京（默认）", "src": "default"}
     out["_at"] = time.time()
@@ -925,9 +935,10 @@ def f_wind():
             grid += [round(-s * math.sin(rad), 2), round(-s * math.cos(rad), 2)]   # u (east), v (north) it blows TOWARD
     local = None
     try:
-        from . import amap
-        w = amap.weather()
-        local = {"text": w.get("wind", ""), "temp": w.get("temp"), "now": w.get("now"), "city": w.get("city"), "src": "高德天气"}
+        from . import weather
+        w = weather.current(wait=20)
+        if w.get("status") == "ok":
+            local = {"text": w.get("wind", ""), "temp": w.get("temp"), "now": w.get("now"), "city": w.get("city"), "src": "Open-Meteo"}
     except Exception:
         pass
     if not local:

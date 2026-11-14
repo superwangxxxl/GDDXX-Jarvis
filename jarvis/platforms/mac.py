@@ -1,14 +1,56 @@
 """macOS: Apple's built-in Vision framework for hands and text (offline, fast on Apple silicon), AVFoundation for the
 camera permission, and a login item so Jarvis opens with the morning briefing."""
 import os
+import re
 import subprocess
+import tempfile
 import time
+import wave
 
 NAME = "Mac"
+
+from .maclocate import locate          # noqa: F401  (device position through Location Services)
 
 
 def open_path(p):
     subprocess.run(["open", str(p)])
+
+
+_VOICE = re.compile(r"^(.+?)\s+([A-Za-z]{2,3}[_-][A-Za-z0-9]{2,4})\s+#")
+
+
+def say_voices(lang="zh"):
+    """Names of the installed system voices for a language (`say -v ?`): local voices only, nothing is sent anywhere."""
+    out = subprocess.run(["/usr/bin/say", "-v", "?"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=15).stdout
+    found = []
+    for line in out.splitlines():
+        m = _VOICE.match(line)
+        if m and m.group(2).lower().startswith(lang):
+            found.append((m.group(2).lower() != "zh_cn", m.group(1).strip()))       # mainland Mandarin voices first
+    return [name for _, name in sorted(found, key=lambda x: x[0])]
+
+
+def say_wav(text, voice):
+    """Speak one sentence with a system voice into a temporary WAV and return (float32 samples, sample rate)."""
+    import numpy as np
+    fd, path = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    try:
+        r = subprocess.run(["/usr/bin/say", "-v", voice, "-o", path, "--file-format=WAVE", "--data-format=LEI16@24000", "-f", "-"],
+                           input=text, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, timeout=60)
+        if r.returncode != 0:
+            raise RuntimeError(f"say failed ({r.returncode}): {r.stderr.strip()[:120]}")
+        with wave.open(path, "rb") as w:
+            frames, rate, width, ch = w.readframes(w.getnframes()), w.getframerate(), w.getsampwidth(), w.getnchannels()
+        if width != 2:
+            raise RuntimeError("unexpected sample format from say")
+        x = np.frombuffer(frames, np.int16).astype(np.float32) / 32768.0
+        return (x.reshape(-1, ch).mean(axis=1) if ch > 1 else x), rate
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 def _permission(want, send):

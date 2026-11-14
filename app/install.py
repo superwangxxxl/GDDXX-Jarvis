@@ -147,7 +147,7 @@ def _from_archive(url, members, models):
 def models():
     STATE["step"] = 2
     man = json.loads((ROOT / "app" / "models.json").read_text(encoding="utf-8"))
-    groups = {"core", "zh" if (config.get("voice_lang") or os.environ.get("JARVIS_LANG") or "en") == "zh" else "en"}
+    groups = {"core", "zh" if (os.environ.get("JARVIS_LANG") or config.get("voice_lang") or "en") == "zh" else "en"}
     M = paths.MODELS
     M.mkdir(parents=True, exist_ok=True)
     todo = [e for e in man["files"] if e.get("group", "core") in groups]
@@ -202,13 +202,82 @@ def models():
                                   e["path"].startswith(("jarvis/", "alan/"))):
         raise RuntimeError("贾维斯的声音模型没有下载下来（jarvis-high 和备用的 alan 都失败了）。请检查网络后重新打开 Jarvis。")
     for d in man.get("dirs", []):
-        if d.get("group") in groups and not (M / d["dir"]).exists():
-            log(f"下载模型文件夹 {d['dir']}")
-            with tempfile.TemporaryDirectory() as td:
-                arc = Path(td) / "a.tar.bz2"
-                _fetch(d["archive"], arc)
-                with tarfile.open(arc) as t:
-                    _extract(t, M)
+        if d.get("group") in groups:
+            _model_dir(d, M)
+
+
+def _dir_problems(dest, entry):
+    """Why a model folder on disk is not exactly the official one ([] when it is). Every file listed in the manifest (recorded by
+    tools/dir_manifest.py from the verified release archive) must be there as a regular file with the same size and sha256, and
+    nothing else may be in the folder: existing or not, a folder is trusted only after this passes."""
+    want = entry.get("files")
+    if not want:
+        return ["清单里没有这个文件夹的逐文件校验值，无法验证"]
+    if not os.path.isdir(dest) or os.path.islink(dest):
+        return ["文件夹不存在"]
+    problems, seen = [], set()
+    for root, dirnames, filenames in os.walk(dest, followlinks=False):
+        for n in dirnames + filenames:
+            full = os.path.join(root, n)
+            rel = os.path.relpath(full, dest).replace(os.sep, "/")
+            if os.path.islink(full):
+                problems.append(f"符号链接 {rel}")
+            elif os.path.isfile(full):
+                seen.add(rel)
+    for rel, (size, digest) in want.items():
+        f = os.path.join(dest, *rel.split("/"))
+        if os.path.islink(f) or not os.path.isfile(f):
+            problems.append(f"缺少 {rel}")
+        elif os.path.getsize(f) != size:
+            problems.append(f"大小不对 {rel}")
+        elif _sha(f) != digest:
+            problems.append(f"校验值不对 {rel}")
+    problems += [f"多出的文件 {x}" for x in sorted(seen - set(want) - {".DS_Store"})[:5]]
+    return problems
+
+
+def _model_dir(d, M):
+    """Make M/<dir> exactly the official folder: a folder already on disk is verified file by file, and anything that does not
+    match (missing files, a half-finished download, edits) is replaced from the official archive, which is itself checked
+    (size, sha256, then every file) before it goes anywhere near the folder. Failure leaves what was there untouched."""
+    dest = M / d["dir"]
+    if dest.exists() or dest.is_symlink():
+        bad = _dir_problems(dest, d)
+        if not bad:
+            log(f"模型文件夹 {d['dir']} 已逐文件校验通过")
+            return
+        log(f"模型文件夹 {d['dir']} 与官方不一致（{len(bad)} 处，如：{'；'.join(bad[:3])}），重新下载并核对")
+    else:
+        log(f"下载模型文件夹 {d['dir']}")
+    if not d.get("files") or not d.get("sha256"):
+        raise RuntimeError(f"清单里没有 {d['dir']} 的校验值，拒绝安装。")
+    with tempfile.TemporaryDirectory(dir=M) as td:
+        arc = Path(td) / "a.tar.bz2"
+        _fetch(d["archive"], arc, d.get("size", 0))
+        if (d.get("size") and arc.stat().st_size != d["size"]) or _sha(arc) != d["sha256"]:
+            raise RuntimeError(f"模型文件夹 {d['dir']} 校验不通过（大小或 sha256 与清单不符），已拒绝安装。请稍后重试。")
+        out = Path(td) / "x"
+        with tarfile.open(arc) as t:
+            _extract(t, out)
+        problems = _dir_problems(out / d["dir"], d)
+        if problems:
+            raise RuntimeError(f"模型文件夹 {d['dir']} 解包后与清单不符（{'；'.join(problems[:3])}），已拒绝安装。")
+        old = None
+        if dest.exists() or dest.is_symlink():
+            old = M / f"{d['dir']}.old-{os.getpid()}"
+            os.replace(dest, old)
+        try:
+            os.replace(out / d["dir"], dest)
+        except Exception:
+            if old is not None:
+                os.replace(old, dest)
+            raise
+        if old is not None:
+            if old.is_symlink():
+                old.unlink()
+            else:
+                shutil.rmtree(old, ignore_errors=True)
+    log(f"模型文件夹 {d['dir']} 已安装并逐文件校验通过")
 
 
 # ---- page ------------------------------------------------------------------------------------------------

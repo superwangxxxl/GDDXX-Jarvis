@@ -22,7 +22,7 @@ except Exception as _e:
 
 
 def lang():
-    return config.get("reply_lang") or "en"
+    return config.reply_lang()
 
 
 def system_prompt():
@@ -39,11 +39,22 @@ def system_prompt():
             "translation of it, shown to the user as a subtitle.")
 
 
-def canned(key):
+def llm_reason(e):
+    """Why the language model could not be reached, in words the user can act on (never includes the key)."""
+    import urllib.error
+    if isinstance(e, urllib.error.HTTPError):
+        return {401: "密钥无效或已过期", 403: "密钥没有权限", 404: "模型名或地址不对", 429: "请求太频繁或额度用完了"}.get(
+            e.code, f"服务返回了 HTTP {e.code}")
+    if isinstance(e, (TimeoutError, urllib.error.URLError)) or "timed out" in str(e):
+        return "网络连不上或超时了"
+    return f"出错了（{type(e).__name__}）"
+
+
+def canned(key, why=""):
     n = config.user_name()
     en = {"offline": f"I'm sorry, {n}. I can't reach my language model at the moment.",
           "done": f"Done, {n}."}[key]
-    zh = {"offline": "抱歉，我暂时连不上语言模型。", "done": "好了。"}[key]
+    zh = {"offline": "抱歉，我暂时连不上语言模型" + (f"：{why}。" if why else "。"), "done": "好了。"}[key]
     return (zh if lang() == "zh" else en + "\n【中文】" + zh)
 
 
@@ -106,7 +117,7 @@ def _answer(text: str, spoken: bool = True) -> str:
             reply = canned("done")
     except Exception as e:
         print(f"llm error: {type(e).__name__}: {str(e)[:200]}", flush=True)
-        return canned("offline")
+        return canned("offline", llm_reason(e))
     HISTORY.extend([{"role": "user", "content": text}, {"role": "assistant", "content": reply}])
     del HISTORY[:-KEEP]
     return reply

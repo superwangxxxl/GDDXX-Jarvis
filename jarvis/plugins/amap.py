@@ -1,9 +1,9 @@
-"""Weather, places and routes from AMap (高德) Web services.
+"""Places and routes from AMap (高德) Web services. (Weather moved to the weather plugin: Open-Meteo, device location.)
 
 The key lives only in ~/.jarvis/config.json on this computer: {"amap": {"key": "..."}}.
-Saved places (home, work, ...) are in ~/.jarvis/places.json. Location is never tracked:
-routes start from home unless the user names another start, and the city comes from
-the home address or, without one, from this computer's public IP."""
+Saved places (home, work, ...) are in ~/.jarvis/places.json. Location is never tracked or guessed:
+routes start from the saved home unless the user names another start; without a saved home there is no
+start point (the IP address is not used as a position)."""
 import json, time, urllib.parse, urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -104,35 +104,13 @@ def save_place(label, address, mode=""):
 
 
 def here():
-    """The user's city: from the home address if saved, else from the public IP (cached for a day)."""
+    """The user's saved home as the start point and city, or empty strings when none is saved."""
     h = places().get("home")
     if h and h.get("location") and not h.get("adcode"):
-        h = _fill(h)                                   # older saves had no adcode, which sent weather to the IP's city
+        h = _fill(h)                                   # older saves had no adcode
     if h and h.get("adcode"):
         return {"city": h.get("city", ""), "adcode": h["adcode"], "location": h["location"], "from": "home"}
-    def ip():
-        r = get("/v3/ip")
-        rect = _s(r.get("rectangle"))
-        loc = ""
-        if rect:
-            (a, b), (c, d) = [map(float, p.split(",")) for p in rect.split(";")]
-            loc = f"{(a + c) / 2:.6f},{(b + d) / 2:.6f}"
-        return {"city": _s(r.get("city")), "adcode": _s(r.get("adcode")), "location": loc, "from": "ip"}
-    return cached("ip", 86400, ip)
-
-
-# -- weather --------------------------------------------------------------
-def weather(city=""):
-    adcode = here()["adcode"] if not city else find(city, here()["adcode"])["adcode"] or city
-    def fetch():
-        live = get("/v3/weather/weatherInfo", city=adcode, extensions="base")["lives"][0]
-        fc = get("/v3/weather/weatherInfo", city=adcode, extensions="all")["forecasts"][0]
-        days = [{"date": c["date"], "week": c["week"], "day": c["dayweather"], "night": c["nightweather"],
-                 "high": c["daytemp"], "low": c["nighttemp"]} for c in fc["casts"]]
-        return {"ok": True, "city": live["city"], "now": live["weather"], "temp": live["temperature"],
-                "humidity": live["humidity"], "wind": f'{live["winddirection"]}风 {live["windpower"]}级',
-                "report_time": live["reporttime"], "days": days}
-    return cached(f"wx{adcode}", 1200, fetch)
+    return {"city": "", "adcode": "", "location": "", "from": ""}
 
 
 # -- routes ---------------------------------------------------------------
@@ -146,7 +124,9 @@ def _place(q, default):
 
 def route(destination, origin="", mode=""):
     ps = places()
-    start = _place(origin, ps.get("home") or {"name": "当前城市", "location": here()["location"], "adcode": here()["adcode"]})
+    start = _place(origin, ps.get("home"))
+    if not start or not start.get("location"):
+        raise RuntimeError("no start point: home is not saved and no start was named")
     end = _place(destination, None)
     mode = mode if mode in MODES else (end.get("mode") or "car")
     o, d = start["location"], end["location"]
@@ -269,10 +249,6 @@ def tools():
         return []
     return [
         {"type": "function", "function": {
-            "name": "get_weather",
-            "description": "Weather now and the next 3 days. Without a city: the user's own city.",
-            "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}}},
-        {"type": "function", "function": {
             "name": "plan_route",
             "description": "Travel time, distance and arrival time to a place, with live traffic for driving. Starts from "
                            "home unless the user names a start. The route is shown on their screen with a QR code that "
@@ -294,8 +270,6 @@ def tools():
 
 
 def run(name, args):
-    if name == "get_weather":
-        return weather(args.get("city", ""))
     if name == "plan_route":
         global LAST_ROUTE
         r = LAST_ROUTE = route(args["destination"], args.get("origin", ""), args.get("mode", ""))
@@ -304,7 +278,7 @@ def run(name, args):
         return save_place(args["label"], args["address"], args.get("mode", ""))
 
 
-HINT = (" For weather use get_weather; for getting somewhere use plan_route (it starts from home; the route and a "
+HINT = (" For getting somewhere use plan_route (it starts from home; the route and a "
         "QR code for phone navigation appear on screen, so mention the QR code). Say the travel time and arrival "
         "time plainly. When the user tells you their home or work address, call save_place. If home is not saved "
         "yet and they ask for a route, give the answer and then ask for their home address once.")

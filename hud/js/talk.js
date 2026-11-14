@@ -32,7 +32,7 @@ function respond(q) {
     if (next >= 0) return `今天还有 ${left} 项安排。下一项是 ${SCHED[next][0]} 的${SCHED[next][2]}，内容是${SCHED[next][3]}。`;
     return '今天的安排都结束了。要我帮你把明天的计划排一下吗？';
   }
-  if (/天气|出行|下雨|温度|穿|路况|通勤/.test(q)) { focusPanel('pWeather'); return '上海今天多云，18 度，空气优。明天 16 到 24 度。去张江科学城现在出发大约 32 分钟，路上畅通。'; }
+  if (/天气|出行|下雨|温度|穿|路况|通勤/.test(q)) { focusPanel('pWeather'); return '语音服务没连上，现在没有天气数据，也没有路线。'; }
   if (/大脑|任务|学习|复盘|agent/i.test(q)) { focusPanel('pAgents'); return '语音服务没连上，左边的 Agent 面板暂时没有实时数据。'; }
   if (/汇报|总结|进度|工作|完成/.test(q)) {
     focusPanel('pReport');

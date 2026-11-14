@@ -3,11 +3,36 @@
 English: openWakeWord's pre-trained "hey jarvis" model (run directly with onnxruntime,
 same feature pipeline as the openwakeword package).
 Chinese: sherpa-onnx keyword spotter with pinyin keywords.
+Chinese mode can run both (DualWake) so “Hey Jarvis” works without switching voice_lang to en.
 """
 import numpy as np
 import onnxruntime as ort
 
 CHUNK = 1280  # 80 ms at 16 kHz
+
+
+class DualWake:
+    """Run a Chinese KWS and (when present) openWakeWord together. First hit wins; .score follows the
+    detector that produced it (HeyJarvis exposes a float; SherpaKws has none → 1.0 on a hit)."""
+
+    def __init__(self, primary, secondary=None):
+        self.primary, self.secondary = primary, secondary
+        self.score = 0.0
+
+    def process(self, frame):
+        hit = self.primary.process(frame)
+        if hit:
+            self.score = float(getattr(self.primary, "score", 1.0) or 1.0)
+            return hit
+        if self.secondary is not None:
+            hit = self.secondary.process(frame)
+            if hit:
+                self.score = float(getattr(self.secondary, "score", 1.0) or 1.0)
+                return hit
+            self.score = float(getattr(self.secondary, "score", 0.0) or 0.0)
+        else:
+            self.score = 0.0
+        return None
 
 
 class HeyJarvis:

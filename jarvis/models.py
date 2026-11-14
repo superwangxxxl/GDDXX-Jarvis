@@ -9,7 +9,7 @@ KWS_DIR = ROOT / "sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01"
 ASR_DIR = ROOT / "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2025-09-09"
 TTS_DIR = ROOT / "kokoro-multi-lang-v1_1"
 SR = 16000
-LANG = os.environ.get("JARVIS_LANG") or config.get("voice_lang") or "en"          # "en" (default) or "zh"
+LANG = config.voice_lang()          # "en" (default) or "zh"
 EN_WAKE_DIR = ROOT / "openwakeword"
 EN_ASR_DIR = ROOT / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8"
 JARVIS_VOICE = Path(os.environ.get("JARVIS_VOICE_MODEL", ROOT / "jarvis" / "jarvis-high.onnx"))
@@ -38,6 +38,23 @@ def kws(threads=1):
     )
 
 
+def ready(lang=None):
+    """(ok, [what is missing]) for the speech models of a language, by looking for the files (a quick check, no hashing:
+    app/install.py verifies size and sha256 when it downloads)."""
+    lang = lang or LANG
+    need = {"语音活动检测模型": ROOT / "silero_vad.onnx",
+            "SenseVoice 语音识别模型": ASR_DIR / "model.int8.onnx"}
+    if lang == "zh":
+        need["中文唤醒词模型（KWS）"] = KWS_DIR / "encoder-epoch-12-avg-2-chunk-16-left-64.int8.onnx"
+        need["Kokoro 中文语音模型"] = TTS_DIR / "model.onnx"
+    else:
+        need["Parakeet 英文识别模型"] = EN_ASR_DIR / "encoder.int8.onnx"
+        need["“Hey Jarvis” 唤醒模型"] = EN_WAKE_DIR / "hey_jarvis_v0.1.onnx"
+        need["英文语音（Piper）"] = JARVIS_VOICE
+    miss = [name for name, p in need.items() if not Path(p).exists()]
+    return not miss, miss
+
+
 def vad(threshold=0.5, min_silence=0.45):
     cfg = sherpa_onnx.VadModelConfig()
     cfg.silero_vad.model = str(ROOT / "silero_vad.onnx")
@@ -50,7 +67,18 @@ def vad(threshold=0.5, min_silence=0.45):
     return sherpa_onnx.VoiceActivityDetector(cfg, buffer_size_in_seconds=60)
 
 
+def en_wake_ready():
+    """The small openWakeWord files used for acoustic “Hey Jarvis” (independent of Parakeet/Piper)."""
+    return all((EN_WAKE_DIR / n).exists() for n in ("hey_jarvis_v0.1.onnx", "melspectrogram.onnx", "embedding_model.onnx"))
+
+
 def wake(lang=None):
+    """English mode: openWakeWord. Chinese mode: WenetSpeech KWS only.
+
+    “Hey Jarvis” in Chinese mode is handled by SenseVoice text confirmation (narrow aliases such as
+    JERVIOUS), not by stacking openWakeWord on the same mic — the English acoustic model false-fires
+    on「嗨贾维斯」and then the English post-wake re-cut ate Chinese commands in CI. DualWake remains
+    available for experiments; do not enable it here without a false-wake gate."""
     from .wakeword import HeyJarvis, SherpaKws
     return HeyJarvis(EN_WAKE_DIR) if (lang or LANG) == "en" else SherpaKws(kws())
 
@@ -93,9 +121,11 @@ class Transcriber:
         self.sv = asr(threads, "zh")
         self.pk = asr(threads, "en") if self.lang == "en" else None
         self._tag = re.compile(r"<\|[^|]*\|>")
+        self.last = ""                  # which recognizer produced the latest text, shown in the HUD
 
     def _run(self, rec, samples):
         st = rec.create_stream(); st.accept_waveform(SR, samples); rec.decode_stream(st)
+        self.last = "Parakeet（英文）" if rec is self.pk else "SenseVoice（中/英/日/韩/粤）"
         return self._tag.sub("", st.result.text).strip()
 
     def text(self, samples, mixed=False):
