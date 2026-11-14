@@ -340,9 +340,9 @@ def check_maclocate():
     assert maclocate.ensure_helper() == (None, maclocate.fail("build_failed")), "a failed compile is reported, not hidden"
     subprocess.run = real_run
     assert (maclocate.SRC / "main.swift").exists() and (maclocate.SRC / "Info.plist").exists()
-    plist = (maclocate.SRC / "Info.plist").read_text()
+    plist = (maclocate.SRC / "Info.plist").read_text(encoding="utf-8")
     assert "NSLocationWhenInUseUsageDescription" in plist and "LSUIElement" in plist
-    swift = (maclocate.SRC / "main.swift").read_text()
+    swift = (maclocate.SRC / "main.swift").read_text(encoding="utf-8")
     assert "requestWhenInUseAuthorization" in swift and "requestLocation" in swift
     for banned in ("ipinfo", "ip-api", "URLSession", "TimeZone"):
         assert banned not in swift, banned
