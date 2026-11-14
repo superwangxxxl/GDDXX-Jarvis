@@ -26,6 +26,8 @@ WAKE_REMNANT = re.compile(
 # Near-misses of the name after an acoustic hit (verify). Keep bounded: must look like Jar/Jer…vis/vous.
 NAME_LIKE = re.compile(
     r"(?:jar|jer|ja|tra|dja|cha|har|gar|ger)\s?v(?:[aeiou]?[sz]|ious|ios|us|iis|ies|ase|ise)\b", re.I)
+# Chinese wake name in the transcript: forces the English post-wake re-cut off (openWakeWord can false-hit on 贾维斯).
+ZH_WAKE_NAME = re.compile(r"[贾加扎嘉假家杰佳甲][维威薇微伟韦为卫唯][斯思丝司士诗史死]")
 FILLER = re.compile(r"^(?:[嗯啊哦呃额唉哎嗷噢 ]{1,3}|(?:um+|uh+|hmm+|mm+|ah+|oh)(?:[ ,]+(?:um+|uh+|hmm+|mm+|ah+|oh))*)[。.!！?？]*$", re.I)
 STOP_WORDS = re.compile(r"^(?:停|停一下|停下|别说了|不用说了|闭嘴|好了|可以了|行了|算了|(?:okay|ok|alright)?[ ,]*(?:stop|wait|hold on|enough|that's enough|never mind|nevermind|cancel|shut up|be quiet|quiet|thanks|thank you|got it|okay|ok)(?:[ ,]+(?:jarvis|please|now|thanks|that's fine|it))*)[。.!！?？]*$", re.I)
 
@@ -184,6 +186,8 @@ class VoiceEngine:
         self.verify_at = None
         a = max(0.0, self.woke_at - 2.0)
         text = self._text(self._span(a, t))
+        if ZH_WAKE_NAME.search(text or ""):
+            self.kw_english = False          # transcript is Chinese wake: never run the English re-cut
         woke, _ = split_wake(text, trusted=True)
         # the acoustic detector already fired, so near-misses of the name count too ("Hi, Travis")
         woke = woke or bool(NAME_LIKE.search(text)) or greet_wake(text)[0]   # claude-greet-wake
@@ -300,10 +304,10 @@ class VoiceEngine:
                 woke_in, after = split_wake(text, trusted=holds_wake)
                 # "Hey Jarvis." alone leaves nothing after the wake word: that is not a command
                 cmd = WAKE_REMNANT.sub("", after if woke_in else text).strip(" ,.!?，。！？")
-                if holds_wake and getattr(self, "kw_english", models.LANG == "en") and re.search(r"[\u4e00-\u9fff]", cmd):
-                    # Chinese after an English wake ("嘿E JARIS / JERVIOUS 把台灯打开"): transcribe only what
-                    # came after the detector fired, so the garbled wake is not part of the request.
-                    # Only when the acoustic wake was English — never for「嗨贾维斯…」(that used to eat the command).
+                # English acoustic wake + Chinese command: re-cut after the hit so a garbled wake is dropped.
+                # Never when the transcript already shows a Chinese wake name (openWakeWord can false-hit on 贾维斯).
+                if (holds_wake and getattr(self, "kw_english", models.LANG == "en")
+                        and re.search(r"[\u4e00-\u9fff]", cmd) and not ZH_WAKE_NAME.search(text or "")):
                     rest = samples[int(max(0.0, self.woke_at - start) * models.SR):]
                     again = self._text(rest, mixed=True) if len(rest) > 0.4 * models.SR else ""
                     if re.search(r"[\u4e00-\u9fff]", again):

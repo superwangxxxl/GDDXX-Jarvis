@@ -86,13 +86,13 @@ const assert = require('assert');
 
   // 7. language and voice: the wake phrase follows the voice language, engines are shown, errors are visible, the switch is wired
   assert((await text('#stateText')).includes('Hey Jarvis') || true);
-  await p.evaluate(() => voiceInfo({ type: 'voice', lang: 'zh', reply_lang: 'zh', wake_word: '嗨，贾维斯', wake: '关键词识别（wenetspeech KWS）+ 文字确认，本机离线',
+  await p.evaluate(() => voiceInfo({ type: 'voice', lang: 'zh', reply_lang: 'zh', wake_word: '嗨，贾维斯 / Hey Jarvis', wake: '关键词识别（wenetspeech KWS）+ 文字确认「嗨，贾维斯」；英文 “Hey Jarvis”/JERVIOUS 走 SenseVoice 文字确认，本机离线',
     stt: 'SenseVoice（中/英/日/韩/粤），本机离线', stt_last: 'SenseVoice（中/英/日/韩/粤）', tts: { engine: 'kokoro', label: 'Kokoro 多语言 v1.1（本机离线）', lang: '中文' },
     brain: 'deepseek · deepseek-chat（只发送识别出的文字）', other_ready: true, other_missing: [], tts_mode: 'auto', system_voices: [],
     style: { speaker: 68, fx: 'scifi', amount: 1, default: { speaker: 68, fx: 'scifi', amount: 1 }, speakers: Array.from({ length: 45 }, (_, i) => ({ sid: 58 + i, name: 'zm_' + String(i + 9).padStart(3, '0'), f0: 100 + i })) } }));
   assert((await text('#stateText')).includes('嗨，贾维斯'), 'idle hint uses the Chinese wake phrase: ' + await text('#stateText'));
   assert((await p.getAttribute('#cmd', 'placeholder')).includes('嗨，贾维斯'));
-  assert((await text('#subtitle')).length >= 0 && await p.evaluate(() => WAKE) === '嗨，贾维斯');
+  assert((await text('#subtitle')).length >= 0 && await p.evaluate(() => WAKE) === '嗨，贾维斯 / Hey Jarvis');
   await p.evaluate(() => voiceError({ stage: 'tts', text: '没有可用的中文语音引擎：测试。回答只会显示文字。' }));
   assert(await p.isVisible('#voiceErr') && (await text('#voiceErr')).includes('语音播报：没有可用的中文语音引擎'));
   await shot('6-voice-error');

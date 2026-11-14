@@ -78,29 +78,24 @@ def scifi(x, sr=SR_OUT, amount=1.0):
 
 
 def robot(x, sr=SR_OUT, amount=1.0):
-    """A clearly mechanical / electronic robot voice — not a mild echo: ring modulation at a carrier plus its octave,
-    a short resonant comb, light amplitude steps (digital stutter), then band-limit and soft-limit. Changes colour only;
-    speed and words stay the same; peak held at 0.9 so it cannot clip."""
+    """A clearly mechanical / electronic robot voice — not a mild echo: ring modulation at a carrier plus a quieter
+    octave, a short resonant comb, then band-limit and soft-limit. Changes colour only; speed and words stay the same;
+    peak held at 0.9. Kept milder than a hard vocoder so Mandarin consonants (下午…) stay recognisable."""
     from scipy.signal import butter, sosfilt
     x = np.asarray(x, np.float32)
     if amount <= 0 or len(x) == 0:
         return limit(x)
     t = np.arange(len(x)) / sr
-    depth = 0.95 * amount
-    carrier = np.sin(2 * np.pi * ROBOT_HZ * t) + 0.45 * np.sin(2 * np.pi * (2 * ROBOT_HZ) * t)
+    depth = 0.88 * amount
+    carrier = np.sin(2 * np.pi * ROBOT_HZ * t) + 0.35 * np.sin(2 * np.pi * (2 * ROBOT_HZ) * t)
     carrier = carrier / (np.abs(carrier).max() + 1e-9)
     y = x * ((1 - depth) + depth * carrier)
-    d = max(1, int(sr * 0.007))
+    d = max(1, int(sr * 0.006))
     a = np.zeros(d + 1)
-    a[0], a[d] = 1.0, -0.72 * amount
+    a[0], a[d] = 1.0, -0.65 * amount
     y = lfilter([1.0], a, y)
-    # light sample-and-hold (~90 Hz) for a digital / vocoder edge without destroying consonants
-    hold = max(1, int(sr / (90 + 40 * amount)))
-    if hold > 1 and len(y) > hold:
-        idx = (np.arange(len(y)) // hold) * hold
-        y = (1 - 0.55 * amount) * y + (0.55 * amount) * y[idx]
-    y = sosfilt(butter(2, [180, 5500], btype="band", fs=sr, output="sos"), y)
-    return limit(np.tanh(1.7 * y / (np.abs(y).max() + 1e-9)))
+    y = sosfilt(butter(2, [150, 6500], btype="band", fs=sr, output="sos"), y)
+    return limit(np.tanh(1.55 * y / (np.abs(y).max() + 1e-9)))
 
 
 ROBOT_HZ = 70.0

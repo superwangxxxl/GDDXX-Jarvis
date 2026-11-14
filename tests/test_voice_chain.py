@@ -206,7 +206,8 @@ def main():
     s = make_service(tts.SystemSpeaker("Tingting"))
     models.LANG = "zh"
     info = s.voice_info()
-    assert info["lang"] == "zh" and info["wake_word"] == "嗨，贾维斯" and info["tts"]["engine"] == "system" and "本机离线" in info["stt"], info
+    assert info["lang"] == "zh" and info["wake_word"] == "嗨，贾维斯 / Hey Jarvis" and info["tts"]["engine"] == "system" and "本机离线" in info["stt"], info
+    assert "SenseVoice" in info["wake"] and "JERVIOUS" in info["wake"], info["wake"]
     assert info["stt_last"] == "SenseVoice（中/英/日/韩/粤）" and info["brain"] == "还没有接入大模型"
     config.update(llm={"provider": "deepseek", "base_url": "https://x/v1", "api_key": "sk-SECRET", "model": "deepseek-chat"})
     info = s.voice_info()

@@ -598,12 +598,9 @@ class Service:
         out = {"type": "voice", "lang": lang, "reply_lang": config.reply_lang(), "tts": info,
                "stt": ("Parakeet（英文）+ SenseVoice（中文兜底），本机离线" if lang == "en" else "SenseVoice（中/英/日/韩/粤），本机离线"),
                "stt_last": getattr(getattr(self.engine, "asr", None), "last", ""),
-               "wake": ("openWakeWord “Hey Jarvis”，本机离线" if lang == "en" else (
-                   "关键词识别（wenetspeech KWS）+ 文字确认「嗨，贾维斯」"
-                   + ("；另有 openWakeWord “Hey Jarvis”" if models.en_wake_ready() else "")
-                   + "，本机离线")),
-               "wake_word": "Hey Jarvis" if lang == "en" else (
-                   "嗨，贾维斯 / Hey Jarvis" if models.en_wake_ready() else "嗨，贾维斯"),
+               "wake": ("openWakeWord “Hey Jarvis”，本机离线" if lang == "en" else
+                        "关键词识别（wenetspeech KWS）+ 文字确认「嗨，贾维斯」；英文 “Hey Jarvis”/JERVIOUS 走 SenseVoice 文字确认，本机离线"),
+               "wake_word": "Hey Jarvis" if lang == "en" else "嗨，贾维斯 / Hey Jarvis",
                "brain": (f"{prov or '自定义'} · {model}（只发送识别出的文字）" if base else "还没有接入大模型"),
                "other_ready": ok, "other_missing": miss, "tts_mode": config.get("voice_tts") or "auto",
                "system_voices": [], "muted": self.muted}
@@ -968,10 +965,8 @@ def main():
     threading.Thread(target=s.audio_loop, daemon=True).start()
     if models.LANG == "en":
         print("Jarvis voice: standing by. Say \"Hey Jarvis\".", flush=True)
-    elif models.en_wake_ready():
-        print("Jarvis 语音：待命中。说「嗨，贾维斯」或 “Hey Jarvis”（回答仍是中文）。", flush=True)
     else:
-        print("Jarvis 语音：待命中。说「嗨，贾维斯」。", flush=True)
+        print("Jarvis 语音：待命中。说「嗨，贾维斯」或 “Hey Jarvis”（回答仍是中文）。", flush=True)
     asyncio.run(s.ws_main())
 
 

@@ -35,8 +35,8 @@
 
 | 环节 | 中文模式用什么 | 在哪里运行 |
 |---|---|---|
-| 唤醒 | sherpa-onnx 关键词识别（wenetspeech KWS，“嗨/嘿贾维斯”）+ 识别文字确认；若已装 openWakeWord，**同模式**也认 “Hey Jarvis”（**不必**切 `voice_lang=en`） | 本机离线 |
-| 识别 | SenseVoice（中/英/日/韩/粤）。**不用** Parakeet；英文唤醒的声学模型（openWakeWord）可与中文模式并存 | 本机离线 |
+| 唤醒 | sherpa-onnx 关键词识别（wenetspeech KWS，“嗨/嘿贾维斯”）+ 识别文字确认；英文 “Hey Jarvis” 在中文模式走 SenseVoice 文字确认（含 JERVIOUS 等窄别名），**不必**切 `voice_lang=en`。不叠 openWakeWord 声学（会对中文「贾维斯」误触发） | 本机离线 |
+| 识别 | SenseVoice（中/英/日/韩/粤）。**不用** Parakeet；openWakeWord 仍属英文模式声学唤醒 | 本机离线 |
 | 大脑 | 你在「接入大脑」里选的模型（如 DeepSeek），只发送识别出的文字和工具结果；系统提示词、错误提示、日程/提醒/全息解说全部用中文 | 云端（仅文字） |
 | 播报 | **Kokoro 多语言 v1.1**（sherpa-onnx 官方发布的开源模型，中英混读）；没装时可用 **macOS 系统中文声音**（Tingting 等，`say`） | 本机离线 |
 
@@ -84,7 +84,7 @@
 
 ## 6. Mac 验收清单（中文语音；音色和启动见第 7、8 节的补充项）
 
-1. 装补丁（`--zh`）后打开 Jarvis。顶部/状态栏应写“待命中 · 说 “嗨，贾维斯””（若已装 openWakeWord 则为「嗨，贾维斯 / Hey Jarvis」）；「菜单 → 语言与语音」里：语音语言“中文（回答：中文）”、识别 SenseVoice、播报引擎名称和“（中文）”。
+1. 装补丁（`--zh`）后打开 Jarvis。顶部/状态栏应写「嗨，贾维斯 / Hey Jarvis」；「菜单 → 语言与语音」里：语音语言“中文（回答：中文）”、识别 SenseVoice、播报引擎名称和“（中文）”。
 2. 点「试听一句」：应听到中文播报；听不到时顶部提示条会写原因（引擎缺失/合成出错）。
 3. 说“嗨，贾维斯”，等“我在”，再说“今天天气怎么样”：应听到中文回答，字幕是中文；「语言与语音」里“最近一次用：SenseVoice”。
 3b. 说 “Hey Jarvis”（或 SenseVoice 听成 JERVIOUS 时仍应唤醒），接着中文命令：回答/字幕/播报仍是中文；`voice_lang` 仍是 `zh`，不要被切成 `en`。

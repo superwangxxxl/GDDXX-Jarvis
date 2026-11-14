@@ -108,22 +108,19 @@ def main():
     config.update(reply_lang="zh")
     assert config.reply_lang() == "zh"
 
-    # zh mode wake() uses DualWake only when openWakeWord files exist; otherwise Chinese KWS alone
+    # zh mode must NOT stack openWakeWord (it false-fires on「嗨贾维斯」); English aliases are text-only
     import types as _types
     import jarvis.wakeword as ww
-    real_ready, real_kws_fn = models.en_wake_ready, models.kws
+    real_kws_fn = models.kws
     real_hj, real_sk = ww.HeyJarvis, ww.SherpaKws
     try:
         models.kws = lambda threads=1: object()
         ww.SherpaKws = lambda spotter: _types.SimpleNamespace(process=lambda f: None)
         ww.HeyJarvis = lambda d: _types.SimpleNamespace(process=lambda f: None, score=0.0)
-        models.en_wake_ready = lambda: False
         assert type(models.wake("zh")).__name__ != "DualWake"
-        models.en_wake_ready = lambda: True
-        assert type(models.wake("zh")).__name__ == "DualWake"
-        assert type(models.wake("en")).__name__ != "DualWake"   # English mode stays openWakeWord-only
+        assert type(models.wake("en")).__name__ != "DualWake"
     finally:
-        models.en_wake_ready, models.kws = real_ready, real_kws_fn
+        models.kws = real_kws_fn
         ww.HeyJarvis, ww.SherpaKws = real_hj, real_sk
 
     print("ok: bilingual wake aliases + reply_lang")

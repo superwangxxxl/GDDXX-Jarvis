@@ -73,16 +73,14 @@ def en_wake_ready():
 
 
 def wake(lang=None):
-    """English mode: openWakeWord only. Chinese mode: WenetSpeech KWS, plus openWakeWord when those
-    files are on disk, so “Hey Jarvis” works without switching voice_lang (replies stay reply_lang)."""
-    from .wakeword import DualWake, HeyJarvis, SherpaKws
-    lang = lang or LANG
-    if lang == "en":
-        return HeyJarvis(EN_WAKE_DIR)
-    zh = SherpaKws(kws())
-    if en_wake_ready():
-        return DualWake(zh, HeyJarvis(EN_WAKE_DIR))
-    return zh
+    """English mode: openWakeWord. Chinese mode: WenetSpeech KWS only.
+
+    “Hey Jarvis” in Chinese mode is handled by SenseVoice text confirmation (narrow aliases such as
+    JERVIOUS), not by stacking openWakeWord on the same mic — the English acoustic model false-fires
+    on「嗨贾维斯」and then the English post-wake re-cut ate Chinese commands in CI. DualWake remains
+    available for experiments; do not enable it here without a false-wake gate."""
+    from .wakeword import HeyJarvis, SherpaKws
+    return HeyJarvis(EN_WAKE_DIR) if (lang or LANG) == "en" else SherpaKws(kws())
 
 
 def asr(threads=2, lang=None):
