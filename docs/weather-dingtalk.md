@@ -107,6 +107,18 @@ shasum -a 256 -c ../jarvis-2.0.4-weather-dws-patch.tar.gz.sha256      # 解包�
 5. 问 “Hey Jarvis, what's the weather?”：回答与面板一致，没数据时说明不可用。
 6. 如果 helper 没编译成功：面板应写“需要 Xcode 命令行工具…”，并且仍可选城市。把 `~/.jarvis/voice.log` 里 `location helper:` 开头的行（不含个人信息）发给我。
 
+单独诊断定位（不打印坐标）：
+
+```bash
+/Applications/Jarvis.app/Contents/Resources/python/bin/python3 -c '
+import sys; sys.path.insert(0, "/Applications/Jarvis.app/Contents/Resources")
+from jarvis.platforms import maclocate
+r = maclocate.locate()
+print({k: v for k, v in r.items() if k not in ("lat", "lon", "name")})'
+```
+
+输出 `{'ok': True, ...}` 说明定位走通；否则 `reason` 就是原因（denied / no_toolchain / build_failed / helper_failed / timeout …）。
+
 钉钉（先确认你终端里 dws 已登录）：
 7. `./install.sh --dws "<路径>"` 之后重开 Jarvis，说“最新一条听记是什么”：应回答标题和时间，屏幕左下出现卡片，带来源链接和“复制链接”。
 8. 把 dws 登出或改错路径再问：应说明未授权/找不到 dws，不编内容。

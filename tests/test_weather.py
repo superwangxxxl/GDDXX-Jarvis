@@ -314,6 +314,30 @@ def check_maclocate():
     subprocess.run = build_run
     r = maclocate.locate()
     assert r["reason"] == "no_toolchain" and [c[0] for c in calls] == ["/usr/bin/xcode-select"], (r, calls)
+    # the build path: tools present -> compiled once (here by a fake swiftc), stamped, moved into place, reused on the next call
+    target = Path(tempfile.mkdtemp()) / "Support"
+    maclocate.paths.APP = target
+    calls.clear()
+
+    def ok_run(cmd, **kw):
+        calls.append(cmd)
+        if cmd[1] == "swiftc":
+            Path(cmd[cmd.index("-o") + 1]).write_text("#!/bin/sh\n")
+            os.chmod(cmd[cmd.index("-o") + 1], 0o755)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    subprocess.run = ok_run
+    app, why = maclocate.ensure_helper()
+    assert why is None and app == target / "JarvisLocate.app" and (app / "Contents" / "Info.plist").exists(), (app, why)
+    assert [c[0] for c in calls] == ["/usr/bin/xcode-select", "/usr/bin/xcrun", "/usr/bin/codesign"] and "-swift-version" in calls[1], calls
+    n = len(calls)
+    assert maclocate.ensure_helper()[0] == app and len(calls) == n, "a built helper is reused without compiling again"
+    maclocate._source_hash = lambda: "changed"
+    assert maclocate.ensure_helper()[0] == app and len(calls) > n, "a changed helper source is rebuilt"
+    subprocess.run = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1 if cmd[1] == "swiftc" else 0, "boom", "")
+    shutil_rm = __import__("shutil").rmtree
+    shutil_rm(target, ignore_errors=True)
+    maclocate._source_hash = lambda: "again"
+    assert maclocate.ensure_helper() == (None, maclocate.fail("build_failed")), "a failed compile is reported, not hidden"
     subprocess.run = real_run
     assert (maclocate.SRC / "main.swift").exists() and (maclocate.SRC / "Info.plist").exists()
     plist = (maclocate.SRC / "Info.plist").read_text()
