@@ -342,8 +342,10 @@ def check_maclocate():
     assert (maclocate.SRC / "main.swift").exists() and (maclocate.SRC / "Info.plist").exists()
     plist = (maclocate.SRC / "Info.plist").read_text(encoding="utf-8")
     assert "NSLocationWhenInUseUsageDescription" in plist and "LSUIElement" in plist
+    assert "Always" not in plist, "the helper only ever asks for when-in-use access"
     swift = (maclocate.SRC / "main.swift").read_text(encoding="utf-8")
     assert "requestWhenInUseAuthorization" in swift and "requestLocation" in swift
+    assert "requestAlwaysAuthorization" not in swift and "startMonitoring" not in swift and "allowsBackgroundLocationUpdates" not in swift
     for banned in ("ipinfo", "ip-api", "URLSession", "TimeZone"):
         assert banned not in swift, banned
 

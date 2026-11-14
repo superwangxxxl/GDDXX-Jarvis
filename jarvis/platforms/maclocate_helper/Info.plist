@@ -13,5 +13,4 @@
 <key>NSHighResolutionCapable</key><true/>
 <key>NSLocationWhenInUseUsageDescription</key><string>Jarvis shows the weather where this Mac is. The position stays on this Mac except for the weather request. 贾维斯用你所在的位置显示天气，位置只用于查询天气。</string>
 <key>NSLocationUsageDescription</key><string>Jarvis shows the weather where this Mac is. The position stays on this Mac except for the weather request. 贾维斯用你所在的位置显示天气，位置只用于查询天气。</string>
-<key>NSLocationAlwaysAndWhenInUseUsageDescription</key><string>Jarvis shows the weather where this Mac is. The position stays on this Mac except for the weather request. 贾维斯用你所在的位置显示天气，位置只用于查询天气。</string>
 </dict></plist>

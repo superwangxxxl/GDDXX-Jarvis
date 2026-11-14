@@ -214,7 +214,7 @@ def main():
     models.LANG = "en"
     assert s.voice_info()["wake_word"] == "Hey Jarvis"
 
-    # -- the language switch: models are checked, the installer runs with the target language, the service restarts
+    # -- the language switch: the installer ALWAYS runs (it verifies folders that already exist), then the service restarts
     models.LANG = "en"
     s = make_service(tts.BrokenSpeaker("x"))
     models.ready = lambda lang=None: (False, ["中文唤醒词模型（KWS）"]) if not getattr(models, "_ok", False) else (True, [])
@@ -240,7 +240,7 @@ def main():
         s.switch_voice("zh")
         stages = [m["stage"] for m in s.sent if m["type"] == "voice_switch"]
         assert stages[0] == "download" and stages[-1] == "error" and not execs, stages
-        assert "校验不通过" in s.sent[-1]["text"] and config.get("voice_lang") is None, "a failed download changes nothing"
+        assert "校验不通过" in s.sent[-1]["text"] and config.get("voice_lang") is None and config.get("reply_lang") is None, "a failed check changes nothing"
         assert seen["env"]["JARVIS_LANG"] == "zh" and seen["cmd"][-3:] == ["install.py", "--no-page", "--models-only"][-3:] or seen["cmd"][-2:] == ["--no-page", "--models-only"], seen["cmd"]
         subprocess.Popen = lambda cmd, **kw: Proc(["10:00:00 下载模型 1/3\n"], 0)
         s.sent.clear()
@@ -250,6 +250,20 @@ def main():
         assert [m["stage"] for m in s.sent if m["type"] == "voice_switch"][-1] == "restart" and execs, s.sent
         assert config.get("voice_lang") == "zh" and config.get("reply_lang") == "zh"
         assert execs[0][1][-2:] == ["-m", "jarvis"]
+        # models that look complete are still verified by the installer before the language changes
+        models._ok = True
+        config.update(voice_lang=None, reply_lang=None)
+        ran = []
+        subprocess.Popen = lambda cmd, **kw: (ran.append(cmd), Proc(["10:00:00 模型文件夹 x 已逐文件校验通过\n"], 0))[1]
+        execs.clear()
+        s.switch_voice("zh")
+        assert ran and execs and config.get("reply_lang") == "zh", "an existing folder is not trusted without the installer's check"
+        models._ok = False
+        subprocess.Popen = lambda cmd, **kw: Proc(["10:00:00 !!! RuntimeError: 与清单不符\n"], 1)
+        config.update(voice_lang=None, reply_lang=None)
+        execs.clear()
+        s.switch_voice("zh")
+        assert not execs and config.get("voice_lang") is None
     finally:
         subprocess.Popen = real_popen
         os.execv = real_exec

@@ -558,21 +558,22 @@ class Service:
         self._switching = True
         try:
             ok, miss = models.ready(lang)
-            if not ok:
-                tell("download", "需要先下载：" + "、".join(miss) + "。下载时会逐个核对校验码。")
-                root = Path(__file__).resolve().parents[1]
-                env = {**os.environ, "JARVIS_LANG": lang, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
-                p = subprocess.Popen([sys.executable, str(root / "app" / "install.py"), "--no-page", "--models-only"], cwd=str(root), env=env,
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-                tail = []
-                for line in p.stdout:
-                    line = line.strip()
-                    if line:
-                        tail = (tail + [line])[-6:]
-                        tell("download", line[:200])
-                if p.wait() != 0 or not models.ready(lang)[0]:
-                    tell("error", "模型没有下载完整（或校验不通过），没有切换。原因：" + (tail[-1] if tail else "未知")[:160])
-                    return
+            # always run the installer: it verifies model folders that are already on disk file by file and replaces any that
+            # are incomplete or different, so a folder is never trusted just because it exists
+            tell("download", ("需要先下载：" + "、".join(miss) + "。" if not ok else "") + "正在逐个核对模型文件的校验码…")
+            root = Path(__file__).resolve().parents[1]
+            env = {**os.environ, "JARVIS_LANG": lang, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+            p = subprocess.Popen([sys.executable, str(root / "app" / "install.py"), "--no-page", "--models-only"], cwd=str(root), env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+            tail = []
+            for line in p.stdout:
+                line = line.strip()
+                if line:
+                    tail = (tail + [line])[-6:]
+                    tell("download", line[:200])
+            if p.wait() != 0 or not models.ready(lang)[0]:
+                tell("error", "模型没有核对通过或没有下载完整，没有切换。原因：" + (tail[-1] if tail else "未知")[:160])
+                return
             config.update(voice_lang=lang, reply_lang=lang)
             tell("restart", "已切换，语音服务正在重启…")
             log(f"voice language -> {lang}, restarting")

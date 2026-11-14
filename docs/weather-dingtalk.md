@@ -1,7 +1,7 @@
 # 天气（设备定位）与钉钉只读听记 · 补丁说明（含部署/回滚）
 
 适用：已安装的 Jarvis **2.0.4**（macOS）。中文语音和“有波形但不回应”的排查见 [chinese-voice.md](chinese-voice.md)，同一个补丁包。本补丁基于官方 `v2.0.4` 标签（与官方 arm64 安装包里的 `jarvis/ hud/ app/` 逐文件一致，已核对），
-只新增或替换文件，不改上游、不改 `VERSION`、不改 `app/models.json`、不动语音模型、不动 `config.json` 里已有的 DeepSeek 配置、语音和记忆。
+只新增或替换文件，不改上游、不改 `VERSION`、不动语音**模型文件**、不动 `config.json` 里已有的 DeepSeek 配置、语音和记忆。**补丁包里确实包含 `app/install.py` 和 `app/models.json`**（完整清单在包里的 `manifest.txt`）：`models.json` 的改动只有三处——Parakeet 四个文件的下载地址固定到官方 revision（校验值不变）、中文模型文件夹的压缩包大小/sha256、以及这两个文件夹的逐文件校验清单；`install.py` 的改动是用这些清单验证模型文件夹（见 [chinese-voice.md](chinese-voice.md) 第 3、5 节）。
 
 > 本文只描述行为和做法，不含任何真实城市、坐标、公司内容、账号或密钥。示例里的路径、城市都是占位。
 
@@ -38,7 +38,7 @@ HUD 无语音服务时（浏览器直接打开）也不再回答“上海今天�
 
 - 官方安装包里的 Python（python-build-standalone 3.12）是**裸可执行文件**：没有 `CFBundleIdentifier`，也没有任何 `NSLocation…UsageDescription`（已在官方 dmg 里核对）。macOS 的定位授权按 App（Bundle ID + Info.plist 里的用途说明）发放，pyobjc 作者也明确说过需要 App Bundle。所以在 Jarvis 的 Python 进程里直接调 CoreLocation **不可靠**。
 - `pywebview` 的 WKWebView 里用 `navigator.geolocation` 同理要走宿主进程的定位授权，宿主还是这个裸 Python，所以也不用它。
-- 采用的做法：`jarvis/platforms/maclocate_helper/main.swift`（几十行）+ `Info.plist`，第一次需要时用 Xcode 命令行工具编译成 `~/Library/Application Support/Jarvis/JarvisLocate.app`（临时签名），之后每次用 `open -W -n -a` 启动它取一次位置，结果写成临时 JSON 再删除。macOS 会弹出标准的“Jarvis Location 想使用你的位置”，授权在「系统设置 → 隐私与安全性 → 定位服务」里能看到、能关。
+- 采用的做法：`jarvis/platforms/maclocate_helper/main.swift`（几十行）+ `Info.plist`，第一次需要时用 Xcode 命令行工具编译成 `~/Library/Application Support/Jarvis/JarvisLocate.app`（临时签名），之后每次用 `open -W -n -a` 启动它取一次位置，结果写成临时 JSON 再删除。helper 只请求「使用期间」授权（`requestWhenInUseAuthorization`），Info.plist 里只有 `NSLocationWhenInUseUsageDescription` 和 macOS 通用的 `NSLocationUsageDescription` 两条用途说明，没有 Always 的说明，代码里也没有 Always 请求、后台定位或持续监控。macOS 会弹出标准的“Jarvis Location 想使用你的位置”，授权在「系统设置 → 隐私与安全性 → 定位服务」里能看到、能关。
 - 前提：Mac 装了 Xcode 命令行工具（`xcode-select -p` 成功）。没装时程序**不会**调用 `swiftc`（否则系统会弹安装窗口），而是显示“需要 Xcode 命令行工具”，你仍可选城市。
 
 **没有在 Mac 上验证过**：云端是 Linux，只能验证 Python 一侧（假的 helper）和 Swift 源码的静态检查。Swift 代码没有在云端编译。以下必须你在 Mac 上验收（见第 6 节）：helper 能否编译、授权弹窗是否出现、授权后能否拿到位置、拒绝后的提示、ad-hoc 签名的 helper 在你的系统版本上是否能拿到定位。若这条路在你的系统上不通，天气会明确显示“不可用”并让你选城市，不会造数据。
@@ -89,11 +89,12 @@ shasum -a 256 -c ../jarvis-2.0.4-zh-weather-dws-patch.tar.gz.sha256      # 解�
 ```
 
 - 脚本先核对：是 macOS、App 版本是 2.0.4、要替换的每个文件的 sha256 都等于官方 2.0.4 原文件（不是就停下，`--force` 才继续）、Jarvis 没在运行。
-- 备份原文件到 `~/Library/Application Support/Jarvis/patch-backup/<时间>/`，复制后逐个校验 sha256。
+- 每次运行都备份到**新的** `~/Library/Application Support/Jarvis/patch-backup/<时间>-<进程号>/`（只存和补丁不同的原文件和这次要改的配置键的旧值）；旧备份文件夹不会被改写或删除。复制后逐个校验 sha256；复制中途失败会把本次已改的文件还原。
+- 配置（`~/.jarvis/config.json`）最后才写，一次原子替换；读不出 JSON 的配置文件绝不会被覆盖（里面有密钥）；DeepSeek 配置、密钥、记忆不被改动。
 - **不重新签名**（默认）：App 的签名身份不变，已经授予的麦克风、摄像头权限继续有效。如果 macOS 提示“已损坏”，加 `--resign` 重新做 ad-hoc 签名，之后麦克风权限可能需要重新允许（必要时 `tccutil reset Microphone io.github.shitoudaidi.jarvis`）。
 - 预先编译定位 helper；没有 Xcode 命令行工具时会明说，天气仍可手动选城市。
 - 如果终端没有写 `/Applications/Jarvis.app` 的权限（macOS 的“App 管理”保护），脚本会报错并停止，给终端授权后重试。
-- 回滚：`./rollback.sh`（还原备份、删除新增文件和编译出的 helper；`--clean-config` 同时还原 `dingtalk` 配置并删掉 `weather` 配置）。语音模型、DeepSeek 配置、记忆都不在补丁范围内，不受影响。
+- 回滚：`./rollback.sh`（还原文件、删除新增文件和编译出的 helper）。`--clean-config` 把安装改过的设置（`dingtalk`、`voice_lang`、`reply_lang`）恢复成**第一次运行 install.sh 时**的值，并删掉本补丁新增的 `weather`、`voice_tts`、`system_voice`。例如：旧安装器已经把 `voice_lang` 设成 `zh` 而 `reply_lang` 没设，回滚后 `voice_lang` 仍是 `zh`、`reply_lang` 被删掉——恢复的是安装前的**中间状态**，**不会**自动恢复你更早的任何备份（要回英文就在「语言与语音」里切，或手动改 `voice_lang`）。回滚从不修改或删除 `patch-backup` 里的备份文件夹，也不碰 `llm`、密钥和记忆。已下载的模型不删。
 
 从源码重建补丁包：`bash tools/mac-patch/make-patch.sh`。
 
@@ -140,6 +141,6 @@ node tests/hud_weather_check.js http://127.0.0.1:8811/index.html   # HUD 面板�
 
 ## 8. 与既有约束的关系
 
-- DeepSeek llm 配置、语音（必需的 10 个模型）、记忆：未改动；补丁里没有 `app/models.json`、没有模型文件。备选声音（Alan）校验不符的问题不在本补丁范围，也不会被强装。
+- DeepSeek llm 配置、语音（必需的 10 个模型文件）、记忆：未改动；补丁里没有任何模型文件，但有 `app/models.json` 和 `app/install.py`（见开头说明）。备选声音（Alan）校验不符的问题不在本补丁范围，也不会被强装。
 - DeepSeek Harness 是可选插件，本补丁不依赖它。
 - 不使用付费服务、不需要注册；唯一的外部服务是 Open-Meteo（天气/空气质量/地名搜索）和用户本机已登录的 dws。

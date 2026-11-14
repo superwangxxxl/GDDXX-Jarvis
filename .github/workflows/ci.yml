@@ -31,6 +31,11 @@ jobs:
         run: python tests/test_dingtalk.py
       - name: voice chain failure handling and the Chinese voice setup (no models, fake engines)
         run: python tests/test_voice_chain.py
+      - name: model folders are verified file by file (stand-in archive)
+        run: python tests/test_model_dirs.py
+      - name: install.sh / rollback.sh guarantees (stand-in app and patch)
+        if: runner.os != 'Windows'
+        run: python tests/test_patch_install.py
       - name: every module imports
         run: python -c "import jarvis.service, jarvis.gesture, jarvis.onboard, jarvis.tools as t; print(sorted(t.names()))"
 

@@ -1,6 +1,9 @@
 #!/bin/bash
 # Undo install.sh: restore the original files from the backups (or only --backup DIR), remove the files the patch added and
 # the compiled location helper.   ./rollback.sh [--backup DIR] [--clean-config]
+# --clean-config puts the settings the install changed (dingtalk, voice_lang, reply_lang) back to what they were at the moment
+# of the first install: if voice_lang was already zh then (set by the older installer), it stays zh and reply_lang is removed.
+# It never restores any earlier backup of yours, never edits or deletes the backup folders, and leaves llm, keys and memory alone.
 set -euo pipefail
 SUPPORT="${JARVIS_APP_DIR:-$HOME/Library/Application Support/Jarvis}"
 DATA="${JARVIS_HOME:-$HOME/.jarvis}"
@@ -28,8 +31,9 @@ if [ $CLEAN = 1 ] && [ -n "$FIRST" ]; then
 import json, os
 cfg = json.load(open(os.environ["CFG"], encoding="utf-8"))
 old = json.load(open(os.path.join(os.environ["BK"], "config-sections.json")))
-for k, v in old.items():
+for k, v in old.items():                     # the values the keys had when the FIRST install ran (not any older backup of yours)
     cfg.pop(k, None) if v is None else cfg.__setitem__(k, v)
+    print("[rollback] config %s: %s" % (k, "removed (it was not set before the install)" if v is None else "back to the value from before the install"))
 cfg.pop("weather", None)
 for k in ("voice_tts", "system_voice"):
     cfg.pop(k, None)
