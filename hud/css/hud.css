@@ -235,8 +235,8 @@ button{font:inherit;color:inherit}
 .panel h2 .wx-gear:hover,.panel h2 .wx-gear[aria-expanded="true"]{color:var(--ink);background:rgba(var(--sk-pri),.12)}
 .panel h2 .wx-gear svg{width:16px;height:16px}
 .wx-ph{height:24px;display:flex;align-items:center;color:var(--ink-3)}
-.wx-now .meta{flex-wrap:wrap;gap:2px 10px}
-.wx-now{max-width:170px;min-width:0}
+.wx-now .meta{flex-direction:column;gap:2px}
+.wx-now{max-width:120px;min-width:0}
 .wx-src{margin-top:10px;font-size:12px;color:var(--ink-2);line-height:1.5}
 .wx-src.warn{color:#FFC27A}
 .wx-set{margin-top:8px;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:rgba(var(--sk-pnl),.6);font-size:12px;color:var(--ink-2)}

@@ -10,8 +10,10 @@ const assert = require('assert');
   p.on('pageerror', e => errs.push('PAGEERROR ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')));
   await p.goto(process.argv[2]);
   await p.waitForTimeout(4000);
-  const wake = async () => { await p.mouse.move(1250 + Math.random() * 20, 300); await p.keyboard.press('Shift'); await p.waitForTimeout(1200); };   // the HUD dims itself when idle
-  const shot = async n => { if (!process.argv[3]) return; await wake(); await p.screenshot({ path: `${process.argv[3]}-${n}.png` }); };
+  // the HUD dims itself when idle and ignores clicks then; software rendering is slow enough for that to happen mid-test, so keep it awake
+  const wake = () => p.evaluate(() => { window.sleepUI = () => {}; clearTimeout(dormT); dormHold = false; document.body.classList.remove('dormant'); });
+  const shot = async n => { if (!process.argv[3]) return; await wake(); await p.waitForTimeout(600); await p.screenshot({ path: `${process.argv[3]}-${n}.png` }); };
+  const click = async sel => { await wake(); await p.click(sel); };
   const text = sel => p.evaluate(s => document.querySelector(s).innerText, sel);
 
   // 1. before any message: no demo numbers anywhere in the panel, the page, or the core coordinates
@@ -57,16 +59,16 @@ const assert = require('assert');
   const sent = [];
   await p.evaluate(() => { window.__sent = []; window.liveSend = o => { window.__sent.push(o); return true; }; });
   await wake();
-  await p.click('#wxGear');
+  await click('#wxGear');
   assert(await p.isVisible('#wxSet'));
   await p.fill('#wxQ', 'New York');
   await p.press('#wxQ', 'Space');
   assert.strictEqual(await p.inputValue('#wxQ'), 'New York ', 'Space in the city box must type, not start listening');
-  await p.click('#wxForm button[type=submit]');
-  await p.click('#wxDevice');
+  await click('#wxForm button[type=submit]');
+  await click('#wxDevice');
   await p.evaluate(() => wxCities({ items: [{ label: 'New York · New York · United States' }, { label: 'New York Mills' }], error: '' }));
   await shot('4-settings');
-  await p.click('#wxCities button[data-i="1"]');
+  await click('#wxCities button[data-i="1"]');
   const msgs = await p.evaluate(() => window.__sent);
   assert.deepStrictEqual(msgs, [{ type: 'weather_search', q: 'New York' }, { type: 'weather_device' }, { type: 'weather_pick', i: 1 }]);
   assert(!(await p.isVisible('#wxSet')));
@@ -76,10 +78,10 @@ const assert = require('assert');
   assert(await p.isVisible('#dwsCard'));
   const card = await text('#dwsCard');
   assert(card.includes('Sample minutes') && card.includes('2026-11-12 09:30') && card.includes('https://example.invalid/m/1') && card.includes('只读'), card);
-  await p.click('#dwsCard .dws-copy');
+  await click('#dwsCard .dws-copy');
   assert.strictEqual(await p.evaluate(() => navigator.clipboard.readText()), 'https://example.invalid/m/1');
   await shot('5-dingtalk');
-  await p.click('#dwsCard .dws-x');
+  await click('#dwsCard .dws-x');
   assert(!(await p.isVisible('#dwsCard')));
 
   console.log(errs.length ? errs.join('\n') : 'ok: hud weather + dingtalk card');
