@@ -28,6 +28,8 @@ function connectVoice() {
     else if (m.type === 'sys') sysUpdate(m);
     else if (m.type === 'schedule') applySchedule(m.items || []);
     else if (m.type === 'weather') wxUpdate(m);
+    else if (m.type === 'weather_cities') wxCities(m);
+    else if (m.type === 'dingtalk_minutes') dingtalkShow(m);
     else if (m.type === 'trip') tripUpdate(m);
     else if (m.type === 'stats') statsShow(m);
     else if (m.type === 'enroll') enrollUpdate(m);

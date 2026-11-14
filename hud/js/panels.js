@@ -73,7 +73,7 @@ function applySchedule(items) {
 }
 renderSched();
 
-let sysLive = false, cpuHot = 0, wxLive = false, tripLive = false;
+let sysLive = false, cpuHot = 0, wxLive = false;
 /* weather from AMap: the icon follows the Chinese weather word */
 const WX_ICON = {
   sun: '<svg viewBox="0 0 24 24" fill="none" stroke="#FFC27A" stroke-width="1.4"><circle cx="12" cy="12" r="4" fill="rgba(255,194,122,.25)"></circle><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"></path></svg>',
@@ -84,16 +84,42 @@ const WX_ICON = {
   fog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 9h16M6 13h12M4 17h16"></path></svg>'
 };
 const wxKind = w => /雪/.test(w) ? 'snow' : /雨/.test(w) ? 'rain' : /雾|霾|沙|尘/.test(w) ? 'fog' : /晴/.test(w) ? (/云/.test(w) ? 'part' : 'sun') : /少云|多云/.test(w) ? 'part' : 'cloud';
-function wxUpdate(m) {
-  wxLive = true;
-  const big = $('#pWeather .wx-big');
-  big.querySelector('b').firstChild.textContent = m.temp;
+/* The weather panel shows only what the service reports: real data with its source and observation time, or "不可用" and why.
+   There are no placeholder numbers; data older than 3 hours is treated as not available even if the service goes quiet. */
+const WX_MAX_AGE = 3 * 3600;
+let wxMsg = null;
+const wxAge = sec => { const n = Math.max(0, Math.round(sec / 60)); return n < 2 ? '刚刚' : n < 60 ? `${n} 分钟前` : `${Math.floor(n / 60)} 小时前`; };
+const WX_NONE = '<svg viewBox="0 0 24 24" fill="none" stroke-width="1.3" aria-hidden="true"><path d="M6 19.5h10a3.8 3.8 0 0 0 0-7.6 5.2 5.2 0 0 0-10 1.6A3 3 0 0 0 6 19.5z" stroke="currentColor" stroke-dasharray="2 2.4" opacity=".5"></path></svg>';
+function wxRender() {
+  const m = wxMsg, big = $('#pWeather .wx-big'), now = $('#pWeather .wx-now > span'), meta = $('#pWeather .wx-now .meta');
+  const days = $('#pWeather .wx-days').children, src = $('#wxSrc');
+  const age = m && m.status === 'ok' ? Date.now() / 1000 - m.observed_epoch : 0;
+  const ok = m && m.status === 'ok' && age <= WX_MAX_AGE;
+  const label = ['今天', '明天', '后天'];
+  if (!ok) {
+    big.querySelector('b').firstChild.textContent = '--'; big.querySelector('.deg').textContent = '';
+    big.querySelector('svg').outerHTML = WX_NONE;
+    now.textContent = m && m.status === 'pending' ? '正在获取…' : '天气不可用';
+    const why = !m ? '等待语音服务' : m.status === 'ok' ? '数据已过期（超过 3 小时）' : (m.message || '暂时没有天气数据');
+    meta.innerHTML = `<span>${escapeHtml(why)}</span>`;
+    for (let i = 0; i < 3; i++) days[i].innerHTML = `${label[i]}<span class="wx-ph">--</span><b>--</b>`;
+    src.textContent = !m ? '没有连上语音服务，没有天气数据' : m.status === 'pending' ? '来源 Open-Meteo · 正在定位' : (m.can_choose_city ? '没有天气数据 · 点右上角齿轮：使用设备定位或选择城市' : '没有天气数据');
+    src.title = ''; src.classList.add('warn');
+    return;
+  }
+  big.querySelector('b').firstChild.textContent = m.temp; big.querySelector('.deg').textContent = '°C';
   big.querySelector('svg').outerHTML = WX_ICON[wxKind(m.now)].replace('<svg ', '<svg aria-hidden="true" ');
-  $('#pWeather .wx-now > span').textContent = m.now;
-  $('#pWeather .wx-now .meta').innerHTML = `<span>${escapeHtml((m.city || '').replace(/市$/, ''))}</span><span>湿度 ${m.humidity}%</span>`;
-  const label = ['今天', '明天'], days = $('#pWeather .wx-days').children;
-  (m.days || []).slice(0, 3).forEach((d, i) => {
-    const wk = WD[+d.week % 7];
-    days[i].innerHTML = `${label[i] || wk}${WX_ICON[wxKind(d.day)]}<b>${d.low}°/${d.high}°</b>`;
-  });
+  now.textContent = m.now + (m.feels != null && m.feels !== m.temp ? ` · 体感 ${m.feels}°` : '');
+  const aqi = m.aqi ? `${m.aqi.scale} ${m.aqi.value} · ${m.aqi.label}` : 'AQI 不可用';
+  meta.innerHTML = `<span>${escapeHtml((m.city || '').replace(/市$/, ''))}</span>` + (m.humidity != null ? `<span>湿度 ${m.humidity}%</span>` : '') + `<span>${escapeHtml(aqi)}</span>`;
+  for (let i = 0; i < 3; i++) {
+    const d = (m.days || [])[i];
+    days[i].innerHTML = d ? `${label[i] || WD[+d.week % 7]}${WX_ICON[wxKind(d.day)]}<b>${d.low}°/${d.high}°</b>` : `${label[i]}<span class="wx-ph">--</span><b>--</b>`;
+  }
+  const how = m.location_source === 'device' ? '设备定位' : '手动选择城市';
+  src.textContent = `来源 ${m.source} · ${how} · 更新 ${m.observed_hm}（${wxAge(age)}）` + (m.stale ? ' · 刷新失败，沿用旧数据' : '');
+  src.title = `数据观测时间 ${m.observed_hm}（当地时间）；本机拉取于 ${m.fetched_hm}。空气质量为模型估算（US AQI）。`;
+  src.classList.toggle('warn', !!m.stale);
 }
+function wxUpdate(m) { wxLive = true; wxMsg = m; wxRender(); }
+setInterval(() => { if (wxMsg) wxRender(); }, 60000);

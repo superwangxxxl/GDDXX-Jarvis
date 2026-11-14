@@ -3,7 +3,7 @@ import os
 import subprocess
 from pathlib import Path
 
-from .generic import open_path, open_camera, hand_detector, ocr        # noqa: F401
+from .generic import open_path, open_camera, hand_detector, ocr, locate        # noqa: F401
 
 NAME = "PC"
 

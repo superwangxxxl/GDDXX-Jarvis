@@ -6,6 +6,8 @@ import time
 
 NAME = "Mac"
 
+from .maclocate import locate          # noqa: F401  (device position through Location Services)
+
 
 def open_path(p):
     subprocess.run(["open", str(p)])

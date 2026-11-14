@@ -193,15 +193,20 @@ class Service:
         except Exception as e:
             log(f"schedule: {e}")
 
-    # -- weather and routes (AMap plugin) -------------------------------------
+    # -- weather (Open-Meteo, device location) and routes (AMap plugin) ---------------
     def push_world(self):
+        weather = tools.plugin("weather")
+        if weather:
+            try:
+                weather.push()
+            except Exception as e:
+                log(f"weather: {type(e).__name__}: {e}")
+        else:
+            self.broadcast({"type": "weather", "status": "unavailable", "reason": "disabled", "message": "天气功能已在设置里关闭。",
+                            "source": "Open-Meteo", "can_choose_city": False})
         amap = tools.plugin("amap")
         if not amap or not amap.key():
             return
-        try:
-            self.broadcast({"type": "weather", **amap.weather()})
-        except Exception as e:
-            log(f"weather: {e}")
         try:                                    # weekday mornings: the commute to work
             ps, now = amap.places(), time.localtime()
             if "home" in ps and "work" in ps and now.tm_wday < 5 and 6 <= now.tm_hour < 10 and not self.trip_shown:
@@ -209,6 +214,11 @@ class Service:
                 self.push_trip()
         except Exception as e:
             log(f"commute: {e}")
+
+    def weather_msg(self, msg):
+        weather = tools.plugin("weather")
+        if weather:
+            weather.msg(msg)
 
     def push_trip(self):
         amap = tools.plugin("amap")
@@ -610,6 +620,8 @@ class Service:
                     elif msg.get("type") == "camera":        # the HUD wants the camera (a demo is on screen)
                         from . import gesture
                         gesture.TRACKER.set(bool(msg.get("on")))
+                    elif msg.get("type", "").startswith("weather_"):  # the weather panel: refresh, use the device location, pick a city
+                        threading.Thread(target=self.weather_msg, args=(msg,), daemon=True).start()
                     elif msg.get("type", "").startswith("earth_"):   # the 地球此刻 wall: fetch feeds, track a flight, opened/closed
                         threading.Thread(target=self.earth_msg, args=(msg,), daemon=True).start()
                     elif msg.get("type", "").startswith("em_"):      # 流浪地球计划: optional download, status, opened/closed
