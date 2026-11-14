@@ -18,7 +18,7 @@ for BK in $LIST; do
   [ -d "$BK/files" ] || continue
   APP="$(cat "$BK/app.txt")"; RES="$APP/Contents/Resources"
   (cd "$BK/files" && find . -type f | sed 's:^\./::') | while read -r path; do cp -p "$BK/files/$path" "$RES/$path"; done
-  while read -r path; do [ -n "$path" ] && rm -f "$RES/$path"; done < "$BK/added.txt"
+  while read -r path; do [ -n "$path" ] && { rm -f "$RES/$path"; rmdir "$RES/$(dirname "$path")" 2>/dev/null || true; }; done < "$BK/added.txt"
 done
 find "$RES/jarvis" "$RES/hud" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
 rm -rf "$SUPPORT/JarvisLocate.app"
