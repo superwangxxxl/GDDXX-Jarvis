@@ -26,7 +26,7 @@ die() { echo "[patch] ERROR: $*" >&2; exit 1; }
 
 [ "${JARVIS_PATCH_ALLOW_NON_MAC:-0}" = 1 ] || [ "$(uname)" = Darwin ] || die "this patch is for macOS"
 [ -d "$RES/jarvis" ] || die "no Jarvis at $APP (use --app)"
-VER="$(grep -A1 CFBundleShortVersionString "$APP/Contents/Info.plist" | sed -n 's:.*<string>\(.*\)</string>.*:\1:p')"
+VER="$(grep CFBundleShortVersionString "$APP/Contents/Info.plist" | sed -n 's:.*</key>[[:space:]]*<string>\(.*\)</string>.*:\1:p' | head -1)"
 [ "$VER" = "2.0.4" ] || die "this patch is for Jarvis 2.0.4, found '$VER'"
 if [ "${JARVIS_PATCH_ALLOW_NON_MAC:-0}" != 1 ] && pgrep -f "$APP/Contents/Resources/(app|python)|jarvis.*-m jarvis" >/dev/null 2>&1; then die "Jarvis is running: quit it first"; fi
 
